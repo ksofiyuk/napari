@@ -25,6 +25,7 @@ from napari.layers.labels._labels_mouse_bindings import (
     pick,
 )
 from napari.layers.labels._labels_utils import (
+    expand_slice,
     get_contours,
     indices_in_shape,
     interpolate_coordinates,
@@ -682,8 +683,6 @@ class Labels(_ImageBase):
     @color_mode.setter
     def color_mode(self, color_mode: Union[str, LabelColorMode]):
         color_mode = LabelColorMode(color_mode)
-        if color_mode == self._color_mode:
-            return
 
         if color_mode == LabelColorMode.DIRECT:
             custom_colormap, label_color_index = color_dict_to_colormap(
@@ -904,7 +903,30 @@ class Labels(_ImageBase):
             self._all_vals[0] = 0
         return self._lookup_with_index
 
-    def _raw_to_displayed(self, raw, data_slice=None):
+    def _partial_labels_refresh(self):
+        """Prepares and displays only an updated part of the labels."""
+
+        if self._updated_slice is None or not self._slice.loaded:
+            return
+
+        dims_displayed = self._slice_input.displayed
+        raw_displayed = self._slice.image.raw
+
+        # Keep only the dimensions that correspond to the current view
+        updated_slice = tuple(
+            [self._updated_slice[index] for index in dims_displayed]
+        )
+
+        offset = [axis_slice.start for axis_slice in updated_slice]
+
+        colors_sliced = self._raw_to_displayed(
+            raw_displayed, data_slice=updated_slice
+        )
+
+        self.events.labels_update(data=colors_sliced, offset=offset)
+        self._updated_slice = None
+
+    def _raw_to_displayed(self, raw, data_slice: Tuple[slice] = None):
         """Determine displayed image from a saved raw image and a saved seed.
 
         This function ensures that the 0 label gets mapped to the 0 displayed
@@ -928,12 +950,26 @@ class Labels(_ImageBase):
             data_slice = tuple(slice(0, size) for size in raw.shape)
 
         labels = raw  # for readability
+        sliced_labels = None
 
         if self.contour > 0:
             if labels.ndim == 2:
-                labels = get_contours(
-                    labels, self.contour, self._background_label
+                # Add one more pixel for the correct borders computation
+                expanded_slice = expand_slice(data_slice, labels.shape, 1)
+                sliced_labels = get_contours(
+                    labels[expanded_slice],
+                    self.contour,
+                    self._background_label,
                 )
+
+                # Remove the latest one-pixel border from the result
+                delta_slice = tuple(
+                    [
+                        slice(s1.start - s2.start, s1.stop - s2.start)
+                        for s1, s2 in zip(data_slice, expanded_slice)
+                    ]
+                )
+                sliced_labels = sliced_labels[delta_slice]
             elif labels.ndim > 2:
                 warnings.warn(
                     trans._(
@@ -942,7 +978,9 @@ class Labels(_ImageBase):
                     )
                 )
 
-        sliced_labels = labels[data_slice]
+        if sliced_labels is None:
+            sliced_labels = labels[data_slice]
+
         # cache the labels and keep track of when values are changed
         update_mask = None
         if (
@@ -956,6 +994,9 @@ class Labels(_ImageBase):
             self._cached_labels[data_slice][update_mask] = labels_to_map
         else:
             self._cached_labels = np.zeros_like(labels)
+            self._cached_mapped_labels = np.zeros_like(
+                labels, dtype=np.float32
+            )
             self._cached_labels[data_slice] = sliced_labels.copy()
             labels_to_map = sliced_labels
 
@@ -968,9 +1009,6 @@ class Labels(_ImageBase):
         if update_mask is not None:
             self._cached_mapped_labels[data_slice][update_mask] = mapped_labels
         else:
-            self._cached_mapped_labels = np.zeros_like(
-                labels, dtype=mapped_labels.dtype
-            )
             self._cached_mapped_labels[data_slice] = mapped_labels
 
         return self._cached_mapped_labels[data_slice]
@@ -1059,7 +1097,7 @@ class Labels(_ImageBase):
         elif label is None:
             col = self.colormap.map([0, 0, 0, 0])[0]
         else:
-            val = self._raw_to_displayed(np.array([label]))
+            val = self._map_labels_to_colors(np.array([label]))
             col = self.colormap.map(val)[0]
         return col
 
@@ -1350,8 +1388,7 @@ class Labels(_ImageBase):
                 self.paint(c, new_label, refresh=False)
             elif self._mode == Mode.FILL:
                 self.fill(c, new_label, refresh=False)
-        self.events.labels_update(updated_slice=self._updated_slice)
-        self._updated_slice = None
+        self._partial_labels_refresh()
 
     def paint(self, coord, new_label, refresh=True):
         """Paint over existing labels with a new label, using the selected
@@ -1443,6 +1480,9 @@ class Labels(_ImageBase):
         ----------
         ..[1] https://numpy.org/doc/stable/user/basics.indexing.html
         """
+        changed_indices = self.data[indices] != value
+        indices = tuple([x[changed_indices] for x in indices])
+
         if not indices or indices[0].size == 0:
             return
 
@@ -1457,23 +1497,36 @@ class Labels(_ImageBase):
         # update the labels image
         self.data[indices] = value
 
-        updated_slice = [
-            (min(axis_indices), max(axis_indices) + 1)
-            for axis_indices in indices
-        ]
+        # tensorstore and xarray do not return their indices in
+        # np.ndarray format, so they need to be converted explicitly
+        if not isinstance(self.data, np.ndarray):
+            indices = [np.array(x).flatten() for x in indices]
+
+        updated_slice = tuple(
+            [
+                slice(min(axis_indices), max(axis_indices) + 1)
+                for axis_indices in indices
+            ]
+        )
+
+        if self.contour > 0:
+            # Expand the slice by 1 pixel as the changes can go beyond
+            # the original slice because of the morphological dilation
+            # (1 pixel because get_countours always applies 1 pixel dilation)
+            updated_slice = expand_slice(updated_slice, self.data.shape, 1)
+
+        if self._updated_slice is None:
+            self._updated_slice = updated_slice
+        else:
+            self._updated_slice = tuple(
+                [
+                    slice(min(s1.start, s2.start), max(s1.stop, s2.stop))
+                    for s1, s2 in zip(updated_slice, self._updated_slice)
+                ]
+            )
 
         if refresh is True:
-            self.events.labels_update(updated_slice=updated_slice)
-        else:
-            if self._updated_slice is None:
-                self._updated_slice = updated_slice
-            else:
-                self._updated_slice = [
-                    (min(min1, min2), max(max1, max2))
-                    for (min1, max1), (min2, max2) in zip(
-                        updated_slice, self._updated_slice
-                    )
-                ]
+            self._partial_labels_refresh()
 
     def get_status(
         self,
