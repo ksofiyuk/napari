@@ -1039,12 +1039,17 @@ class Labels(_ImageBase):
         -------
              Encoded colors mapped between 0 and 1.
         """
+        show_selected_label = (
+            self.show_selected_label
+            and self.selected_label != self._background_label
+        )
+
         if self._color_lookup_func is None:
             self._color_lookup_func = self._get_color_lookup_func(
                 labels_to_map, np.min(labels_to_map), np.max(labels_to_map)
             )
         if (
-            not self.show_selected_label
+            not show_selected_label
             and self._color_mode == LabelColorMode.DIRECT
         ):
             min_label_id = labels_to_map.min()
@@ -1069,21 +1074,14 @@ class Labels(_ImageBase):
                     ]
                 )[inv].reshape(labels_to_map.shape)
         elif (
-            not self.show_selected_label
-            and self._color_mode == LabelColorMode.AUTO
+            not show_selected_label and self._color_mode == LabelColorMode.AUTO
         ):
             mapped_labels = self._color_lookup_func(labels_to_map)
-        elif (
-            self.show_selected_label
-            and self._color_mode == LabelColorMode.AUTO
-        ):
+        elif show_selected_label and self._color_mode == LabelColorMode.AUTO:
             mapped_labels = self._color_lookup_func(
                 labels_to_map, self._selected_label
             )
-        elif (
-            self.show_selected_label
-            and self._color_mode == LabelColorMode.DIRECT
-        ):
+        elif show_selected_label and self._color_mode == LabelColorMode.DIRECT:
             selected_label = self._selected_label
             if selected_label not in self._label_color_index:
                 selected_label = None
@@ -1091,11 +1089,7 @@ class Labels(_ImageBase):
             mapped_labels = np.where(
                 labels_to_map == selected_label,
                 index[selected_label],
-                np.where(
-                    labels_to_map != self._background_label,
-                    index[None],
-                    index[self._background_label],
-                ),
+                index[self._background_label],
             )
         else:
             raise ValueError("Unsupported Color Mode")
