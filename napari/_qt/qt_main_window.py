@@ -525,6 +525,7 @@ class _QtMainWindow(QMainWindow):
                 dock.setFloating(False)
 
         self._save_current_window_settings()
+        self._qt_viewer.viewer.layers.clear()
 
         # On some versions of Darwin, exiting while fullscreen seems to tickle
         # some bug deep in NSWindow.  This forces the fullscreen keybinding
