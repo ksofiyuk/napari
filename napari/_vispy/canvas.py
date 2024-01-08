@@ -23,6 +23,7 @@ from napari.utils.interactions import (
     mouse_release_callbacks,
     mouse_wheel_callbacks,
 )
+from napari.utils.theme import get_theme
 
 if TYPE_CHECKING:
     from typing import Callable, List, Optional, Tuple, Union
@@ -89,7 +90,7 @@ class VispyCanvas:
         for ignoring mousewheel events with modifiers.
     """
 
-    _instances = WeakSet()
+    _instances: WeakSet[VispyCanvas] = WeakSet()
 
     def __init__(
         self,
@@ -115,6 +116,10 @@ class VispyCanvas:
         self._overlay_to_visual = {}
         self._key_map_handler = key_map_handler
         self._instances.add(self)
+
+        self.bgcolor = transform_color(
+            get_theme(self.viewer.theme).canvas.as_hex()
+        )[0]
 
         # Call get_max_texture_sizes() here so that we query OpenGL right
         # now while we know a Canvas exists. Later calls to
@@ -204,7 +209,7 @@ class VispyCanvas:
         # Note 2. the reason for using the `as_hex` here is to avoid
         # `UserWarning` which is emitted when RGB values are above 1
         self._last_theme_color = transform_color(
-            get_theme(theme, False).canvas.as_hex()
+            get_theme(theme).canvas.as_hex()
         )[0]
         self.bgcolor = self._last_theme_color
 
@@ -299,7 +304,7 @@ class VispyCanvas:
 
     def _map_canvas2world(
         self, position: List[int, int]
-    ) -> Tuple[np.float64, np.float64]:
+    ) -> Tuple[float, float]:
         """Map position from canvas pixels into world coordinates.
 
         Parameters
@@ -516,7 +521,7 @@ class VispyCanvas:
             if nd > self.viewer.dims.ndisplay:
                 displayed_axes = displayed_sorted
             else:
-                displayed_axes = self.viewer.dims.displayed[-nd:]
+                displayed_axes = list(self.viewer.dims.displayed[-nd:])
             layer._update_draw(
                 scale_factor=1 / self.viewer.camera.zoom,
                 corner_pixels_displayed=canvas_corners_world[
@@ -537,7 +542,7 @@ class VispyCanvas:
         -------
         None
         """
-        self.viewer._canvas_size = tuple(self.size)
+        self.viewer._canvas_size = self.size
 
     def add_layer_visual_mapping(self, napari_layer, vispy_layer) -> None:
         """Maps a napari layer to its corresponding vispy layer and sets the parent scene of the vispy layer.
@@ -558,6 +563,7 @@ class VispyCanvas:
         self.layer_to_visual[napari_layer] = vispy_layer
 
         napari_layer.events.visible.connect(self._reorder_layers)
+        self.viewer.camera.events.angles.connect(vispy_layer._on_camera_move)
 
         self._reorder_layers()
 
@@ -576,6 +582,7 @@ class VispyCanvas:
         layer = event.value
         layer.events.visible.disconnect(self._reorder_layers)
         vispy_layer = self.layer_to_visual[layer]
+        self.viewer.camera.events.disconnect(vispy_layer._on_camera_move)
         vispy_layer.close()
         del vispy_layer
         del self.layer_to_visual[layer]
