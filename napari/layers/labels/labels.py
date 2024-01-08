@@ -4,6 +4,7 @@ from contextlib import contextmanager
 from typing import Dict, List, Optional, Tuple, Union
 
 import numpy as np
+import numpy.typing as npt
 import pandas as pd
 from scipy import ndimage as ndi
 from skimage.draw import polygon2mask
@@ -228,7 +229,7 @@ class Labels(_ImageBase):
         Mode.PAINT: draw,
         Mode.FILL: draw,
         Mode.ERASE: draw,
-        Mode.DRAW_POLYGON: no_op,  # the overlay handles mouse events in this mode
+        Mode.POLYGON: no_op,  # the overlay handles mouse events in this mode
     }
 
     brush_size_on_mouse_move = BrushSizeOnMouseMove(min_brush_size=1)
@@ -240,7 +241,7 @@ class Labels(_ImageBase):
         Mode.PAINT: brush_size_on_mouse_move,
         Mode.FILL: no_op,
         Mode.ERASE: brush_size_on_mouse_move,
-        Mode.DRAW_POLYGON: no_op,  # the overlay handles mouse events in this mode
+        Mode.POLYGON: no_op,  # the overlay handles mouse events in this mode
     }
 
     _cursor_modes = {
@@ -250,7 +251,7 @@ class Labels(_ImageBase):
         Mode.PAINT: 'circle',
         Mode.FILL: 'cross',
         Mode.ERASE: 'circle',
-        Mode.DRAW_POLYGON: 'cross',
+        Mode.POLYGON: 'cross',
     }
 
     _history_limit = 100
@@ -346,7 +347,7 @@ class Labels(_ImageBase):
             LabelsPolygonOverlay,
         )
 
-        self._overlays.update({'draw_polygon': LabelsPolygonOverlay()})
+        self._overlays.update({"polygon": LabelsPolygonOverlay()})
 
         self._selected_label = 1
         self._predefined_labels = None
@@ -811,7 +812,7 @@ class Labels(_ImageBase):
         if mode == self._mode:
             return mode
 
-        self._overlays['draw_polygon'].enabled = mode == Mode.DRAW_POLYGON
+        self._overlays["polygon"].enabled = mode == Mode.POLYGON
         if mode in {Mode.PAINT, Mode.ERASE}:
             self.cursor_size = self._calculate_cursor_size()
 
@@ -1215,7 +1216,7 @@ class Labels(_ImageBase):
                 start_point, end_point, n_points, endpoint=True
             )
             im_slice = self._slice.image.raw
-            bounding_box = self._display_bounding_box(np.array(dims_displayed))
+            bounding_box = self._display_bounding_box(dims_displayed)
             # the display bounding box is returned as a closed interval
             # (i.e. the endpoint is included) by the method, but we need
             # open intervals in the code that follows, so we add 1.
@@ -1682,9 +1683,9 @@ class Labels(_ImageBase):
 
     def get_status(
         self,
-        position: Optional[Tuple] = None,
+        position: Optional[npt.ArrayLike] = None,
         *,
-        view_direction: Optional[np.ndarray] = None,
+        view_direction: Optional[npt.ArrayLike] = None,
         dims_displayed: Optional[List[int]] = None,
         world: bool = False,
     ) -> dict:
@@ -1723,13 +1724,13 @@ class Labels(_ImageBase):
 
         pos = position
         if pos is not None:
-            pos = pos[-self.ndim :]
+            pos = np.asarray(pos)[-self.ndim :]
         source_info['coordinates'] = generate_layer_coords_status(pos, value)
 
         # if this labels layer has properties
         properties = self._get_properties(
             position,
-            view_direction=view_direction,
+            view_direction=np.asarray(view_direction),
             dims_displayed=dims_displayed,
             world=world,
         )
