@@ -40,6 +40,11 @@ def activate_labels_polygon_mode(layer: Labels):
     layer.mode = Mode.POLYGON
 
 
+@register_label_mode_action(trans._("Activate the bounding box tool"))
+def activate_labels_bounding_box_mode(layer: Labels):
+    layer.mode = Mode.BOUNDING_BOX
+
+
 @register_label_mode_action(trans._("Activate the fill bucket"))
 def activate_labels_fill_mode(layer: Labels):
     layer.mode = Mode.FILL
@@ -62,6 +67,7 @@ labels_fun_to_mode = [
     (activate_labels_erase_mode, Mode.ERASE),
     (activate_labels_paint_mode, Mode.PAINT),
     (activate_labels_polygon_mode, Mode.POLYGON),
+    (activate_labels_bounding_box_mode, Mode.BOUNDING_BOX),
     (activate_labels_fill_mode, Mode.FILL),
     (activate_labels_picker_mode, Mode.PICK),
 ]
@@ -141,13 +147,25 @@ def toggle_preserve_labels(layer: Labels):
 @Labels.bind_key(KeyMod.CtrlCmd | KeyCode.KeyZ, overwrite=True)
 def undo(layer: Labels):
     """Undo the last paint or fill action since the view slice has changed."""
-    layer.undo()
+    if layer.mode == Mode.BOUNDING_BOX:
+        layer.bb_overlay.undo()
+    else:
+        layer.undo()
 
 
 @Labels.bind_key(KeyMod.CtrlCmd | KeyMod.Shift | KeyCode.KeyZ, overwrite=True)
 def redo(layer: Labels):
     """Redo any previously undone actions."""
-    layer.redo()
+    if layer.mode == Mode.BOUNDING_BOX:
+        layer.bb_overlay.redo()
+    else:
+        layer.redo()
+
+
+@Labels.bind_key(KeyCode.Delete, overwrite=True)
+def remove_selected_bbox(layer: Labels):
+    if layer.mode == Mode.BOUNDING_BOX:
+        layer.bb_overlay.remove_selected_bounding_box()
 
 
 @register_label_action(
@@ -155,6 +173,8 @@ def redo(layer: Labels):
 )
 def reset_polygon(layer: Labels):
     """Reset the drawing of the current polygon."""
+    if layer.mode != Mode.POLYGON:
+        return
     layer._overlays["polygon"].points = []
 
 
@@ -163,4 +183,6 @@ def reset_polygon(layer: Labels):
 )
 def complete_polygon(layer: Labels):
     """Complete the drawing of the current polygon."""
+    if layer.mode != Mode.POLYGON:
+        return
     layer._overlays["polygon"].add_polygon_to_labels(layer)
