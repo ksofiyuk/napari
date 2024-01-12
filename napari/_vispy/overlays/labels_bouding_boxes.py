@@ -118,9 +118,15 @@ class VispyLabelsBoundingBoxesOverlay(LayerOverlayMixin, VispySceneOverlay):
             self._redraw_bbox_color(rect_visual)
 
     def _redraw_bbox_color(self, rect_visual):
-        rect_label_color = self.layer.get_color(rect_visual.label).tolist()
-        rect_visual.color = rect_label_color[:3] + [self.layer.opacity]
-        rect_visual.border_color = rect_label_color[:3]
+        color, border_color = self._get_bbox_color(rect_visual.label)
+        rect_visual.color = color
+        rect_visual.border_color = border_color
+
+    def _get_bbox_color(self, label):
+        rect_label_color = self.layer.get_color(label).tolist()
+        color = rect_label_color[:3] + [self.layer.opacity]
+        border_color = rect_label_color[:3]
+        return color, border_color
 
     def _on_mouse_press_and_drag(self, layer, event):
         if not self.overlay.enabled:
@@ -185,15 +191,15 @@ class VispyLabelsBoundingBoxesOverlay(LayerOverlayMixin, VispySceneOverlay):
         self._state = InteractionState.IDLE
 
     def _create_rect(self, center, height, width, label):
-        current_color = self._get_current_label_color()
+        color, border_color = self._get_bbox_color(label)
         rect_visual = RectangleWithLabel(
-            center=self._to_displayed(center),
+            center=center,
             height=height,
             width=width,
             label=label,
             dims_displayed=self._dims_displayed,
-            color=current_color,
-            border_color=current_color[:3],
+            color=color,
+            border_color=border_color,
             border_width=2,
         )
 
@@ -390,9 +396,6 @@ class VispyLabelsBoundingBoxesOverlay(LayerOverlayMixin, VispySceneOverlay):
         self.overlay.events.bounding_boxes.connect(
             self._on_bounding_boxes_change
         )
-
-    def _get_current_label_color(self):
-        return self.layer._selected_color.tolist()[:3] + [self.layer.opacity]
 
     def _get_mouse_coordinates(self, event):
         pos = mouse_event_to_labels_coordinate(self.layer, event)
