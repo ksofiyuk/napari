@@ -1,3 +1,4 @@
+import typing
 import warnings
 from collections import deque
 from contextlib import contextmanager
@@ -49,6 +50,11 @@ from napari.utils.misc import _is_array_type
 from napari.utils.naming import magic_name
 from napari.utils.status_messages import generate_layer_coords_status
 from napari.utils.translations import trans
+
+if typing.TYPE_CHECKING:
+    from napari.components.overlays.labels_bounding_boxes import (
+        LabelsBoundingBoxesOverlay,
+    )
 
 
 class Labels(_ImageBase):
@@ -230,6 +236,7 @@ class Labels(_ImageBase):
         Mode.FILL: draw,
         Mode.ERASE: draw,
         Mode.POLYGON: no_op,  # the overlay handles mouse events in this mode
+        Mode.BOUNDING_BOX: no_op,  # the overlay handles mouse events in this mode
     }
 
     brush_size_on_mouse_move = BrushSizeOnMouseMove(min_brush_size=1)
@@ -242,6 +249,7 @@ class Labels(_ImageBase):
         Mode.FILL: no_op,
         Mode.ERASE: brush_size_on_mouse_move,
         Mode.POLYGON: no_op,  # the overlay handles mouse events in this mode
+        Mode.BOUNDING_BOX: no_op,  # the overlay handles mouse events in this mode
     }
 
     _cursor_modes = {
@@ -252,6 +260,7 @@ class Labels(_ImageBase):
         Mode.FILL: 'cross',
         Mode.ERASE: 'circle',
         Mode.POLYGON: 'cross',
+        Mode.BOUNDING_BOX: 'standard',
     }
 
     _history_limit = 100
@@ -281,6 +290,7 @@ class Labels(_ImageBase):
         multiscale=None,
         cache=True,
         plane=None,
+        with_bb_overlay=False,
         experimental_clipping_planes=None,
     ) -> None:
         if name is None and data is not None:
@@ -343,11 +353,20 @@ class Labels(_ImageBase):
             labels_update=Event,
         )
 
+        from napari.components.overlays.labels_bounding_boxes import (
+            LabelsBoundingBoxesOverlay,
+        )
         from napari.components.overlays.labels_polygon import (
             LabelsPolygonOverlay,
         )
 
-        self._overlays.update({"polygon": LabelsPolygonOverlay()})
+        self._overlays.update(
+            {
+                "polygon": LabelsPolygonOverlay(),
+            }
+        )
+        if with_bb_overlay:
+            self._overlays["bounding_boxes"] = LabelsBoundingBoxesOverlay()
 
         self._selected_label = 1
         self._predefined_labels = None
@@ -399,6 +418,10 @@ class Labels(_ImageBase):
 
         self._predefined_labels = predefined_labels
         self.events.predefined_labels()
+
+    @property
+    def bb_overlay(self) -> Optional['LabelsBoundingBoxesOverlay']:
+        return self._overlays.get("bounding_boxes", None)
 
     @property
     def rendering(self):
@@ -813,6 +836,8 @@ class Labels(_ImageBase):
             return mode
 
         self._overlays["polygon"].enabled = mode == Mode.POLYGON
+        if self.bb_overlay:
+            self.bb_overlay.enabled = mode == Mode.BOUNDING_BOX
         if mode in {Mode.PAINT, Mode.ERASE}:
             self.cursor_size = self._calculate_cursor_size()
 

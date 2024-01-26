@@ -197,6 +197,14 @@ class QtLabelsControls(QtLayerControls):
             self.polygon_button,
         )
 
+        self.bounding_box_button = QtModeRadioButton(
+            layer, 'labels_bounding_box', Mode.BOUNDING_BOX
+        )
+        action_manager.bind_button(
+            'napari:activate_labels_bounding_box_mode',
+            self.bounding_box_button,
+        )
+
         self.fill_button = QtModeRadioButton(
             layer,
             'fill',
@@ -222,6 +230,7 @@ class QtLabelsControls(QtLayerControls):
         self._EDIT_BUTTONS = (
             self.paint_button,
             self.polygon_button,
+            self.bounding_box_button,
             self.pick_button,
             self.fill_button,
             self.erase_button,
@@ -231,6 +240,8 @@ class QtLabelsControls(QtLayerControls):
         self.button_group.addButton(self.panzoom_button)
         self.button_group.addButton(self.paint_button)
         self.button_group.addButton(self.polygon_button)
+        if layer.bb_overlay:
+            self.button_group.addButton(self.bounding_box_button)
         self.button_group.addButton(self.pick_button)
         self.button_group.addButton(self.fill_button)
         self.button_group.addButton(self.erase_button)
@@ -242,6 +253,8 @@ class QtLabelsControls(QtLayerControls):
         button_row.addWidget(self.erase_button)
         button_row.addWidget(self.paint_button)
         button_row.addWidget(self.polygon_button)
+        if layer.bb_overlay:
+            button_row.addWidget(self.bounding_box_button)
         button_row.addWidget(self.fill_button)
         button_row.addWidget(self.pick_button)
         button_row.addWidget(self.panzoom_button)
@@ -327,6 +340,8 @@ class QtLabelsControls(QtLayerControls):
             self.paint_button.setChecked(True)
         elif mode == Mode.POLYGON:
             self.polygon_button.setChecked(True)
+        elif mode == Mode.BOUNDING_BOX:
+            self.bounding_box_button.setChecked(True)
         elif mode == Mode.FILL:
             self.fill_button.setChecked(True)
         elif mode == Mode.ERASE:
@@ -450,6 +465,9 @@ class QtLabelsControls(QtLayerControls):
             self.ndimSpinBox.setValue(int(value))
             if hasattr(self, 'polygon_button'):
                 self.polygon_button.setEnabled(self._is_polygon_tool_enabled())
+                self.bounding_box_button.setEnabled(
+                    self._is_polygon_tool_enabled()
+                )
 
     def _on_contiguous_change(self):
         """Receive layer model contiguous change event and update the checkbox."""
@@ -497,6 +515,7 @@ class QtLabelsControls(QtLayerControls):
         self.renderLabel.setVisible(render_visible)
         self._on_editable_or_visible_change()
         self.polygon_button.setEnabled(self._is_polygon_tool_enabled())
+        self.bounding_box_button.setEnabled(self._is_polygon_tool_enabled())
 
     def _is_polygon_tool_enabled(self):
         return (
