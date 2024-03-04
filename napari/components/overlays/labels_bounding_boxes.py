@@ -1,3 +1,5 @@
+from typing import Optional
+
 from napari.components.overlays.base import SceneOverlay
 
 
@@ -5,6 +7,7 @@ class LabelsBoundingBoxesOverlay(SceneOverlay):
     active: bool = False
     enabled: bool = True
     bounding_boxes: list = []
+    show_id_pattern: Optional[str] = None
 
     _vispy_overlay = None
 
