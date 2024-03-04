@@ -55,7 +55,7 @@ class VispyLabelsBoundingBoxesOverlay(LayerOverlayMixin, VispySceneOverlay):
             parent=parent,
         )
 
-        self.overlay.events.enabled.connect(self._on_enabled_change)
+        self.overlay.events.active.connect(self._on_active_change)
         self.overlay.events.bounding_boxes.connect(
             self._on_bounding_boxes_change
         )
@@ -89,8 +89,8 @@ class VispyLabelsBoundingBoxesOverlay(LayerOverlayMixin, VispySceneOverlay):
         else:
             self._update_color()
 
-    def _on_enabled_change(self):
-        if not self.overlay.enabled:
+    def _on_active_change(self):
+        if not self.overlay.active:
             self._quit_selection_mode()
 
     def _on_bounding_boxes_change(self):
@@ -129,7 +129,7 @@ class VispyLabelsBoundingBoxesOverlay(LayerOverlayMixin, VispySceneOverlay):
         return color, border_color
 
     def _on_mouse_press_and_drag(self, layer, event):
-        if not self.overlay.enabled:
+        if not self.overlay.active or not self.overlay.enabled:
             return
 
         if event.button == 1:

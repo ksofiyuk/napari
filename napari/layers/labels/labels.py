@@ -837,7 +837,7 @@ class Labels(_ImageBase):
 
         self._overlays["polygon"].enabled = mode == Mode.POLYGON
         if self.bb_overlay:
-            self.bb_overlay.enabled = mode == Mode.BOUNDING_BOX
+            self.bb_overlay.active = mode == Mode.BOUNDING_BOX
         if mode in {Mode.PAINT, Mode.ERASE}:
             self.cursor_size = self._calculate_cursor_size()
 

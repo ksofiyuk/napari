@@ -2,7 +2,8 @@ from napari.components.overlays.base import SceneOverlay
 
 
 class LabelsBoundingBoxesOverlay(SceneOverlay):
-    enabled: bool = False
+    active: bool = False
+    enabled: bool = True
     bounding_boxes: list = []
 
     _vispy_overlay = None
