@@ -239,13 +239,15 @@ class VispyLabelsBoundingBoxesOverlay(LayerOverlayMixin, VispySceneOverlay):
 
     def _find_drag_modifier(self, point):
         drag_modifiers = self._selected_bbox.drag_modifiers
+        _, _, w, h = self._selected_bbox.xywh
+        drag_radius = max(2, int(0.5 * (w + h) / 20)) ** 2
         selected_modifier = None
         last_r = None
 
         for i, (y, x) in enumerate(drag_modifiers[:, :2]):
             r = (y - point[0]) ** 2 + (x - point[1]) ** 2
 
-            if r <= 4 and (last_r is None or last_r > r):
+            if r <= drag_radius and (last_r is None or last_r > r):
                 selected_modifier = drag_modifiers[i]
                 last_r = r
 
