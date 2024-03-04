@@ -3,7 +3,7 @@ from typing import Optional, Tuple
 
 import numpy as np
 import numpy.typing as npt
-from vispy.scene.visuals import Compound, Markers, Rectangle
+from vispy.scene.visuals import Compound, Markers, Rectangle, Text
 
 from napari._vispy.overlays.base import LayerOverlayMixin, VispySceneOverlay
 from napari.components.overlays import LabelsBoundingBoxesOverlay
@@ -55,7 +55,7 @@ class VispyLabelsBoundingBoxesOverlay(LayerOverlayMixin, VispySceneOverlay):
             parent=parent,
         )
 
-        self.overlay.events.enabled.connect(self._on_enabled_change)
+        self.overlay.events.active.connect(self._on_active_change)
         self.overlay.events.bounding_boxes.connect(
             self._on_bounding_boxes_change
         )
@@ -89,8 +89,8 @@ class VispyLabelsBoundingBoxesOverlay(LayerOverlayMixin, VispySceneOverlay):
         else:
             self._update_color()
 
-    def _on_enabled_change(self):
-        if not self.overlay.enabled:
+    def _on_active_change(self):
+        if not self.overlay.active:
             self._quit_selection_mode()
 
     def _on_bounding_boxes_change(self):
@@ -110,6 +110,7 @@ class VispyLabelsBoundingBoxesOverlay(LayerOverlayMixin, VispySceneOverlay):
                 height=bounding_box_dict["h"],
                 width=bounding_box_dict["w"],
                 label=bounding_box_dict["label"],
+                rect_id=bounding_box_dict.get("id", None),
             )
             self._bounding_boxes.add_subvisual(rect_visual)
 
@@ -129,7 +130,7 @@ class VispyLabelsBoundingBoxesOverlay(LayerOverlayMixin, VispySceneOverlay):
         return color, border_color
 
     def _on_mouse_press_and_drag(self, layer, event):
-        if not self.overlay.enabled:
+        if not self.overlay.active or not self.overlay.enabled:
             return
 
         if event.button == 1:
@@ -190,9 +191,15 @@ class VispyLabelsBoundingBoxesOverlay(LayerOverlayMixin, VispySceneOverlay):
 
         self._state = InteractionState.IDLE
 
-    def _create_rect(self, center, height, width, label):
+    def _create_rect(
+        self, center, height, width, label, rect_id: Optional[int] = None
+    ):
+        if rect_id is None:
+            rect_id = self._get_next_id()
+
         color, border_color = self._get_bbox_color(label)
         rect_visual = RectangleWithLabel(
+            rect_id=rect_id,
             center=center,
             height=height,
             width=width,
@@ -201,9 +208,16 @@ class VispyLabelsBoundingBoxesOverlay(LayerOverlayMixin, VispySceneOverlay):
             color=color,
             border_color=border_color,
             border_width=2,
+            show_id_pattern=self.overlay.show_id_pattern,
         )
 
         return rect_visual
+
+    def _get_next_id(self) -> int:
+        return (
+            max([x.id for x in self._bounding_boxes._subvisuals], default=0)
+            + 1
+        )
 
     def _find_and_select_bounding_box(self, click_pos) -> bool:
         matched_rect = None
@@ -239,13 +253,15 @@ class VispyLabelsBoundingBoxesOverlay(LayerOverlayMixin, VispySceneOverlay):
 
     def _find_drag_modifier(self, point):
         drag_modifiers = self._selected_bbox.drag_modifiers
+        _, _, w, h = self._selected_bbox.xywh
+        drag_radius = max(2, int(0.5 * (w + h) / 20)) ** 2
         selected_modifier = None
         last_r = None
 
         for i, (y, x) in enumerate(drag_modifiers[:, :2]):
             r = (y - point[0]) ** 2 + (x - point[1]) ** 2
 
-            if r <= 4 and (last_r is None or last_r > r):
+            if r <= drag_radius and (last_r is None or last_r > r):
                 selected_modifier = drag_modifiers[i]
                 last_r = r
 
@@ -427,24 +443,53 @@ class VispyLabelsBoundingBoxesOverlay(LayerOverlayMixin, VispySceneOverlay):
 class RectangleWithLabel(Rectangle):
     def __init__(
         self,
+        rect_id,
         center,
         width: float,
         height: float,
         label: int,
         dims_displayed,
+        border_color,
+        show_id_pattern: Optional[str] = None,
         **kwargs,
     ):
+        self.id = rect_id
         self.label = label
         self._orig_center = center  # (y_row, x_col)
         self._orig_hw = height, width
 
         if dims_displayed[0] > dims_displayed[1]:
             width, height = height, width
+        center_pos = center[dims_displayed[::-1]]
+
+        self._text_visual = None
+
+        if show_id_pattern:
+            font_size = 14
+            color = "yellow"
+            params = [x for x in show_id_pattern.split(";") if len(x) > 3]
+            if len(params) > 1:
+                show_id_pattern = params[0]
+                for param in params[1:]:
+                    param_name, param_value = param.split("=")
+                    if param_name == "font_size":
+                        font_size = int(param_value)
+                    elif param_name == "color":
+                        color = param_value
+
+            self._text_visual = Text(
+                show_id_pattern.format(id=rect_id, label=label),
+                color=color,
+                pos=[center_pos[0], center_pos[1] - 0.5 * height],
+                font_size=font_size,
+                bold=True,
+            )
 
         super().__init__(
-            center=center[dims_displayed[::-1]],
+            center=center_pos,
             width=width,
             height=height,
+            border_color=border_color,
             **kwargs,
         )
 
@@ -459,6 +504,11 @@ class RectangleWithLabel(Rectangle):
         if dims_displayed[0] > dims_displayed[1]:
             width, height = height, width
         self.width, self.height = width, height
+        if self._text_visual is not None:
+            self._text_visual.pos = [
+                self.center[0],
+                self.center[1] - 0.5 * height,
+            ]
 
     def contains(self, point) -> bool:
         y, x = point
@@ -509,6 +559,7 @@ class RectangleWithLabel(Rectangle):
 
     def asdict(self):
         return {
+            "id": self.id,
             "xc": self._orig_center[1],
             "yc": self._orig_center[0],
             "w": self._orig_hw[1],
@@ -535,3 +586,9 @@ class RectangleWithLabel(Rectangle):
                 width=new_state.get("w", self._orig_hw[1]),
             )
         self.label = new_state.get("label", self.label)
+
+    def add_subvisual(self, visual):
+        super().add_subvisual(visual)
+        if len(self._subvisuals) == 2 and self._text_visual is not None:
+            self._subvisuals.append(visual)
+            super().add_subvisual(self._text_visual)
