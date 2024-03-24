@@ -1,5 +1,5 @@
 from enum import auto
-from typing import Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import numpy.typing as npt
@@ -47,6 +47,10 @@ class VispyLabelsBoundingBoxesOverlay(LayerOverlayMixin, VispySceneOverlay):
         self._label_before_selection: Optional[int] = None
         self._undo_history = []
         self._redo_history = []
+        self._available_rect_visuals: Dict[bool, List[RectangleWithLabel]] = {
+            False: [],
+            True: [],
+        }
 
         super().__init__(
             node=Compound([self._bounding_boxes, self._drag_nodes]),
@@ -98,9 +102,11 @@ class VispyLabelsBoundingBoxesOverlay(LayerOverlayMixin, VispySceneOverlay):
         self._undo_history = []
         self._redo_history = []
 
-        current_rects = self._bounding_boxes._subvisuals[:]
+        current_rects: List[
+            RectangleWithLabel
+        ] = self._bounding_boxes._subvisuals[:]
         for x in current_rects:
-            self._bounding_boxes.remove_subvisual(x)
+            self._remove_rect_visual(x)
 
         for bounding_box_dict in self.overlay.bounding_boxes:
             rect_visual = self._create_rect(
@@ -187,7 +193,7 @@ class VispyLabelsBoundingBoxesOverlay(LayerOverlayMixin, VispySceneOverlay):
         if width * height > 9:
             self._add_bounding_box(rect_visual, add_subvisual=False)
         else:
-            self._bounding_boxes.remove_subvisual(rect_visual)
+            self._remove_rect_visual(rect_visual)
 
         self._state = InteractionState.IDLE
 
@@ -198,18 +204,25 @@ class VispyLabelsBoundingBoxesOverlay(LayerOverlayMixin, VispySceneOverlay):
             rect_id = self._get_next_id()
 
         color, border_color = self._get_bbox_color(label)
-        rect_visual = RectangleWithLabel(
-            rect_id=rect_id,
-            center=center,
-            height=height,
-            width=width,
-            label=label,
-            dims_displayed=self._dims_displayed,
-            color=color,
-            border_color=border_color,
-            border_width=2,
-            show_id_pattern=self.overlay.show_id_pattern,
-        )
+        show_id = bool(self.overlay.show_id_pattern)
+        rect_kwargs = {
+            "rect_id": rect_id,
+            "center": center,
+            "height": height,
+            "width": width,
+            "label": label,
+            "dims_displayed": self._dims_displayed,
+            "color": color,
+            "border_color": border_color,
+            "border_width": 2,
+            "show_id_pattern": self.overlay.show_id_pattern,
+        }
+
+        if self._available_rect_visuals[show_id]:
+            rect_visual = self._available_rect_visuals[show_id].pop()
+            rect_visual.setup(**rect_kwargs)
+        else:
+            rect_visual = RectangleWithLabel(**rect_kwargs)
 
         return rect_visual
 
@@ -335,10 +348,14 @@ class VispyLabelsBoundingBoxesOverlay(LayerOverlayMixin, VispySceneOverlay):
     ) -> None:
         if bounding_box is self._selected_bbox:
             self._quit_selection_mode()
-        self._bounding_boxes.remove_subvisual(bounding_box)
+        self._remove_rect_visual(bounding_box)
         if save_history:
             self._add_operation_to_history(Operation.REMOVE_BB, bounding_box)
         self._update_bounding_boxes()
+
+    def _remove_rect_visual(self, bb: 'RectangleWithLabel') -> None:
+        self._bounding_boxes.remove_subvisual(bb)
+        self._available_rect_visuals[bb.text_visual is not None].append(bb)
 
     def _quit_selection_mode(self):
         if self._state != InteractionState.BBOX_SELECTED:
@@ -453,16 +470,45 @@ class RectangleWithLabel(Rectangle):
         show_id_pattern: Optional[str] = None,
         **kwargs,
     ):
+        self.text_visual = None
+        if show_id_pattern:
+            self.text_visual = Text()
+
+        super().__init__(center=(0, 0), **kwargs)
+        self.setup(
+            rect_id,
+            center,
+            width,
+            height,
+            label,
+            dims_displayed,
+            border_color,
+            show_id_pattern,
+            **kwargs,
+        )
+
+    def setup(
+        self,
+        rect_id,
+        center,
+        width: float,
+        height: float,
+        label: int,
+        dims_displayed,
+        border_color,
+        show_id_pattern: Optional[str] = None,
+        **kwargs,
+    ):
+        self.unfreeze()
         self.id = rect_id
         self.label = label
         self._orig_center = center  # (y_row, x_col)
         self._orig_hw = height, width
+        self.freeze()
 
         if dims_displayed[0] > dims_displayed[1]:
             width, height = height, width
         center_pos = center[dims_displayed[::-1]]
-
-        self._text_visual = None
 
         if show_id_pattern:
             font_size = 14
@@ -477,21 +523,21 @@ class RectangleWithLabel(Rectangle):
                     elif param_name == "color":
                         color = param_value
 
-            self._text_visual = Text(
-                show_id_pattern.format(id=rect_id, label=label),
-                color=color,
-                pos=[center_pos[0], center_pos[1] - 0.5 * height],
-                font_size=font_size,
-                bold=True,
+            self.text_visual.text = show_id_pattern.format(
+                id=rect_id, label=label
             )
+            self.text_visual.color = color
+            self.text_visual.pos = [
+                center_pos[0],
+                center_pos[1] - 0.5 * height,
+            ]
+            self.text_visual.font_size = font_size
+            self.text_visual.bold = True
 
-        super().__init__(
-            center=center_pos,
-            width=width,
-            height=height,
-            border_color=border_color,
-            **kwargs,
-        )
+        self.center = center_pos
+        self.width = width
+        self.height = height
+        self.border_color = border_color
 
     def set_rect(self, dims_displayed, center=None, height=None, width=None):
         if center is not None:
@@ -504,8 +550,8 @@ class RectangleWithLabel(Rectangle):
         if dims_displayed[0] > dims_displayed[1]:
             width, height = height, width
         self.width, self.height = width, height
-        if self._text_visual is not None:
-            self._text_visual.pos = [
+        if self.text_visual is not None:
+            self.text_visual.pos = [
                 self.center[0],
                 self.center[1] - 0.5 * height,
             ]
@@ -589,6 +635,6 @@ class RectangleWithLabel(Rectangle):
 
     def add_subvisual(self, visual):
         super().add_subvisual(visual)
-        if len(self._subvisuals) == 2 and self._text_visual is not None:
+        if len(self._subvisuals) == 2 and self.text_visual is not None:
             self._subvisuals.append(visual)
-            super().add_subvisual(self._text_visual)
+            super().add_subvisual(self.text_visual)
