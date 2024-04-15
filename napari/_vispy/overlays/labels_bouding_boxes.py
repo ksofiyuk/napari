@@ -504,7 +504,6 @@ class RectangleWithLabel(Rectangle):
         self.label = label
         self._orig_center = center  # (y_row, x_col)
         self._orig_hw = height, width
-        self.freeze()
 
         if dims_displayed[0] > dims_displayed[1]:
             width, height = height, width
@@ -512,6 +511,7 @@ class RectangleWithLabel(Rectangle):
 
         if show_id_pattern:
             font_size = 14
+            id_font_offset_y = 0
             color = "yellow"
             params = [x for x in show_id_pattern.split(";") if len(x) > 3]
             if len(params) > 1:
@@ -522,18 +522,22 @@ class RectangleWithLabel(Rectangle):
                         font_size = int(param_value)
                     elif param_name == "color":
                         color = param_value
+                    elif param_name == "id_font_offset_y":
+                        id_font_offset_y = float(param_value)
 
+            self._id_font_offset_y = font_size * id_font_offset_y
             self.text_visual.text = show_id_pattern.format(
                 id=rect_id, label=label
             )
             self.text_visual.color = color
             self.text_visual.pos = [
                 center_pos[0],
-                center_pos[1] - 0.5 * height,
+                center_pos[1] - 0.5 * height - self._id_font_offset_y,
             ]
             self.text_visual.font_size = font_size
             self.text_visual.bold = True
 
+        self.freeze()
         self.center = center_pos
         self.width = width
         self.height = height
@@ -553,7 +557,7 @@ class RectangleWithLabel(Rectangle):
         if self.text_visual is not None:
             self.text_visual.pos = [
                 self.center[0],
-                self.center[1] - 0.5 * height,
+                self.center[1] - 0.5 * height - self._id_font_offset_y,
             ]
 
     def contains(self, point) -> bool:
