@@ -368,14 +368,20 @@ class VispyLabelsBoundingBoxesOverlay(LayerOverlayMixin, VispySceneOverlay):
 
     def _add_bounding_box(
         self,
-        bounding_box: 'RectangleWithLabel',
+        bb: 'RectangleWithLabel',
         save_history: bool = True,
         add_subvisual: bool = True,
     ) -> None:
         if add_subvisual:
-            self._bounding_boxes.add_subvisual(bounding_box)
+            self._bounding_boxes.add_subvisual(bb)
+
+        rects_pool = self._available_rect_visuals[bb.text_visual is not None]
+        self._available_rect_visuals[bb.text_visual is not None] = [
+            x for x in rects_pool if x is not bb
+        ]
+
         if save_history:
-            self._add_operation_to_history(Operation.CREATE_BB, bounding_box)
+            self._add_operation_to_history(Operation.CREATE_BB, bb)
         self._update_bounding_boxes()
 
     def _add_operation_to_history(self, op_type: Operation, op_state):
