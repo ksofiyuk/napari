@@ -117,6 +117,7 @@ class VispyLabelsBoundingBoxesOverlay(LayerOverlayMixin, VispySceneOverlay):
                 width=bounding_box_dict["w"],
                 label=bounding_box_dict["label"],
                 rect_id=bounding_box_dict.get("id", None),
+                score=bounding_box_dict.get("score", None),
             )
             self._bounding_boxes.add_subvisual(rect_visual)
 
@@ -198,7 +199,13 @@ class VispyLabelsBoundingBoxesOverlay(LayerOverlayMixin, VispySceneOverlay):
         self._state = InteractionState.IDLE
 
     def _create_rect(
-        self, center, height, width, label, rect_id: Optional[int] = None
+        self,
+        center,
+        height,
+        width,
+        label,
+        rect_id: Optional[int] = None,
+        score: Optional[float] = None,
     ):
         if rect_id is None:
             rect_id = self._get_next_id()
@@ -216,6 +223,7 @@ class VispyLabelsBoundingBoxesOverlay(LayerOverlayMixin, VispySceneOverlay):
             "border_color": border_color,
             "border_width": 2,
             "show_id_pattern": self.overlay.show_id_pattern,
+            "score": score,
         }
 
         if self._available_rect_visuals[show_id]:
@@ -474,6 +482,7 @@ class RectangleWithLabel(Rectangle):
         dims_displayed,
         border_color,
         show_id_pattern: Optional[str] = None,
+        score: Optional[float] = None,
         **kwargs,
     ):
         self.text_visual = None
@@ -490,7 +499,7 @@ class RectangleWithLabel(Rectangle):
             dims_displayed,
             border_color,
             show_id_pattern,
-            **kwargs,
+            score,
         )
 
     def setup(
@@ -503,11 +512,13 @@ class RectangleWithLabel(Rectangle):
         dims_displayed,
         border_color,
         show_id_pattern: Optional[str] = None,
-        **kwargs,
+        score: Optional[float] = None,
+        **_kwargs,
     ):
         self.unfreeze()
         self.id = rect_id
         self.label = label
+        self.score = score
         self._orig_center = center  # (y_row, x_col)
         self._orig_hw = height, width
 
@@ -533,7 +544,7 @@ class RectangleWithLabel(Rectangle):
 
             self._id_font_offset_y = font_size * id_font_offset_y
             self.text_visual.text = show_id_pattern.format(
-                id=rect_id, label=label
+                id=rect_id, label=label, score=score
             )
             self.text_visual.color = color
             self.text_visual.pos = [
@@ -614,7 +625,7 @@ class RectangleWithLabel(Rectangle):
         return corners
 
     def asdict(self):
-        return {
+        rect_dict = {
             "id": self.id,
             "xc": self._orig_center[1],
             "yc": self._orig_center[0],
@@ -622,6 +633,9 @@ class RectangleWithLabel(Rectangle):
             "h": self._orig_hw[0],
             "label": self.label,
         }
+        if self.score is not None:
+            rect_dict["score"] = self.score
+        return rect_dict
 
     def update_state(self, new_state, dims_displayed):
         if (
