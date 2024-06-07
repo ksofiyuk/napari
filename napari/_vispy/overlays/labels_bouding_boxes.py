@@ -141,10 +141,10 @@ class VispyLabelsBoundingBoxesOverlay(LayerOverlayMixin, VispySceneOverlay):
         if not self.overlay.active or not self.overlay.enabled:
             return
 
-        if event.button == 1:
-            press_pos = self._get_mouse_coordinates(event)
-            yield
+        press_pos = self._get_mouse_coordinates(event)
+        yield
 
+        if event.button == 1:
             if self._state == InteractionState.IDLE:
                 if event.type == 'mouse_move':
                     for _ in self._create_new_bounding_box(event, press_pos):
@@ -160,8 +160,12 @@ class VispyLabelsBoundingBoxesOverlay(LayerOverlayMixin, VispySceneOverlay):
                     ):
                         yield
                 else:
-                    if self._find_and_select_bounding_box(press_pos) == 0:
+                    if not self._find_and_select_bounding_box(press_pos):
                         self._quit_selection_mode()
+        elif event.button == 2 and self.overlay.right_click_relabelling:
+            self._find_and_select_bounding_box(
+                press_pos, change_label_on_selection=True
+            )
 
     def _create_new_bounding_box(self, event, start_pos):
         if self.layer.selected_label == self.layer._background_label:
@@ -241,7 +245,9 @@ class VispyLabelsBoundingBoxesOverlay(LayerOverlayMixin, VispySceneOverlay):
             + 1
         )
 
-    def _find_and_select_bounding_box(self, click_pos) -> bool:
+    def _find_and_select_bounding_box(
+        self, click_pos, change_label_on_selection: bool = False
+    ) -> bool:
         matched_rect = None
 
         rect: RectangleWithLabel
@@ -258,7 +264,12 @@ class VispyLabelsBoundingBoxesOverlay(LayerOverlayMixin, VispySceneOverlay):
             self._label_before_selection = self.layer.selected_label
         self._state = InteractionState.BBOX_SELECTED
         self._selected_bbox = matched_rect
-        self.layer.selected_label = matched_rect.label
+        if change_label_on_selection:
+            self._change_bounding_box(
+                matched_rect, {"label": self.layer.selected_label}
+            )
+        else:
+            self.layer.selected_label = matched_rect.label
         self._draw_selected_bbox_drag_nodes()
 
         return True
