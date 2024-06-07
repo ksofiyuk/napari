@@ -277,7 +277,8 @@ class VispyLabelsBoundingBoxesOverlay(LayerOverlayMixin, VispySceneOverlay):
     def _draw_selected_bbox_drag_nodes(self):
         drag_points = self._selected_bbox.drag_modifiers[:, :2]
 
-        edge_color = self._selected_bbox.border_color.darker(dv=0.5)
+        edge_color = self._selected_bbox.border_color
+        edge_color = edge_color.darker(dv=min(edge_color.value, 0.5))
         self._drag_nodes.set_data(
             pos=self._to_displayed(drag_points),
             edge_color=edge_color,
