@@ -8,6 +8,7 @@ class LabelsBoundingBoxesOverlay(SceneOverlay):
     enabled: bool = True
     bounding_boxes: list = []
     show_id_pattern: Optional[str] = None
+    right_click_relabelling: bool = False
 
     _vispy_overlay = None
 

@@ -129,6 +129,7 @@ class VispyLabelsBoundingBoxesOverlay(LayerOverlayMixin, VispySceneOverlay):
         color, border_color = self._get_bbox_color(rect_visual.label)
         rect_visual.color = color
         rect_visual.border_color = border_color
+        rect_visual.refresh_text_label()
 
     def _get_bbox_color(self, label):
         rect_label_color = self.layer.get_color(label).tolist()
@@ -140,10 +141,10 @@ class VispyLabelsBoundingBoxesOverlay(LayerOverlayMixin, VispySceneOverlay):
         if not self.overlay.active or not self.overlay.enabled:
             return
 
-        if event.button == 1:
-            press_pos = self._get_mouse_coordinates(event)
-            yield
+        press_pos = self._get_mouse_coordinates(event)
+        yield
 
+        if event.button == 1:
             if self._state == InteractionState.IDLE:
                 if event.type == 'mouse_move':
                     for _ in self._create_new_bounding_box(event, press_pos):
@@ -159,8 +160,12 @@ class VispyLabelsBoundingBoxesOverlay(LayerOverlayMixin, VispySceneOverlay):
                     ):
                         yield
                 else:
-                    if self._find_and_select_bounding_box(press_pos) == 0:
+                    if not self._find_and_select_bounding_box(press_pos):
                         self._quit_selection_mode()
+        elif event.button == 2 and self.overlay.right_click_relabelling:
+            self._find_and_select_bounding_box(
+                press_pos, change_label_on_selection=True
+            )
 
     def _create_new_bounding_box(self, event, start_pos):
         if self.layer.selected_label == self.layer._background_label:
@@ -240,7 +245,9 @@ class VispyLabelsBoundingBoxesOverlay(LayerOverlayMixin, VispySceneOverlay):
             + 1
         )
 
-    def _find_and_select_bounding_box(self, click_pos) -> bool:
+    def _find_and_select_bounding_box(
+        self, click_pos, change_label_on_selection: bool = False
+    ) -> bool:
         matched_rect = None
 
         rect: RectangleWithLabel
@@ -257,7 +264,12 @@ class VispyLabelsBoundingBoxesOverlay(LayerOverlayMixin, VispySceneOverlay):
             self._label_before_selection = self.layer.selected_label
         self._state = InteractionState.BBOX_SELECTED
         self._selected_bbox = matched_rect
-        self.layer.selected_label = matched_rect.label
+        if change_label_on_selection:
+            self._change_bounding_box(
+                matched_rect, {"label": self.layer.selected_label}
+            )
+        else:
+            self.layer.selected_label = matched_rect.label
         self._draw_selected_bbox_drag_nodes()
 
         return True
@@ -265,7 +277,8 @@ class VispyLabelsBoundingBoxesOverlay(LayerOverlayMixin, VispySceneOverlay):
     def _draw_selected_bbox_drag_nodes(self):
         drag_points = self._selected_bbox.drag_modifiers[:, :2]
 
-        edge_color = self._selected_bbox.border_color.darker(dv=0.5)
+        edge_color = self._selected_bbox.border_color
+        edge_color = edge_color.darker(dv=min(edge_color.value, 0.5))
         self._drag_nodes.set_data(
             pos=self._to_displayed(drag_points),
             edge_color=edge_color,
@@ -521,44 +534,54 @@ class RectangleWithLabel(Rectangle):
         self.score = score
         self._orig_center = center  # (y_row, x_col)
         self._orig_hw = height, width
+        self._show_id_pattern = show_id_pattern
 
         if dims_displayed[0] > dims_displayed[1]:
             width, height = height, width
-        center_pos = center[dims_displayed[::-1]]
-
-        if show_id_pattern:
-            font_size = 14
-            id_font_offset_y = 0
-            color = "yellow"
-            params = [x for x in show_id_pattern.split(";") if len(x) > 3]
-            if len(params) > 1:
-                show_id_pattern = params[0]
-                for param in params[1:]:
-                    param_name, param_value = param.split("=")
-                    if param_name == "font_size":
-                        font_size = int(param_value)
-                    elif param_name == "color":
-                        color = param_value
-                    elif param_name == "id_font_offset_y":
-                        id_font_offset_y = float(param_value)
-
-            self._id_font_offset_y = font_size * id_font_offset_y
-            self.text_visual.text = show_id_pattern.format(
-                id=rect_id, label=label, score=score
-            )
-            self.text_visual.color = color
-            self.text_visual.pos = [
-                center_pos[0],
-                center_pos[1] - 0.5 * height - self._id_font_offset_y,
-            ]
-            self.text_visual.font_size = font_size
-            self.text_visual.bold = True
-
-        self.freeze()
-        self.center = center_pos
+        self.center = center[dims_displayed[::-1]]
         self.width = width
         self.height = height
         self.border_color = border_color
+
+        self._setup_text_label()
+        self.freeze()
+
+    def refresh_text_label(self) -> None:
+        if not self._show_id_pattern or "{label}" not in self._show_id_pattern:
+            return
+        self._setup_text_label()
+
+    def _setup_text_label(self) -> None:
+        if not self._show_id_pattern:
+            return
+
+        show_id_pattern = self._show_id_pattern
+        font_size = 14
+        id_font_offset_y = 0
+        color = "yellow"
+        params = [x for x in show_id_pattern.split(";") if len(x) > 3]
+        if len(params) > 1:
+            show_id_pattern = params[0]
+            for param in params[1:]:
+                param_name, param_value = param.split("=")
+                if param_name == "font_size":
+                    font_size = int(param_value)
+                elif param_name == "color":
+                    color = param_value
+                elif param_name == "id_font_offset_y":
+                    id_font_offset_y = float(param_value)
+
+        self._id_font_offset_y = font_size * id_font_offset_y
+        self.text_visual.text = show_id_pattern.format(
+            id=self.id, label=self.label, score=self.score
+        )
+        self.text_visual.color = color
+        self.text_visual.pos = [
+            self.center[0],
+            self.center[1] - 0.5 * self.height - self._id_font_offset_y,
+        ]
+        self.text_visual.font_size = font_size
+        self.text_visual.bold = True
 
     def set_rect(self, dims_displayed, center=None, height=None, width=None):
         if center is not None:
