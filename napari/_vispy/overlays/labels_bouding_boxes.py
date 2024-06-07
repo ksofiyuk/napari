@@ -129,6 +129,7 @@ class VispyLabelsBoundingBoxesOverlay(LayerOverlayMixin, VispySceneOverlay):
         color, border_color = self._get_bbox_color(rect_visual.label)
         rect_visual.color = color
         rect_visual.border_color = border_color
+        rect_visual.refresh_text_label()
 
     def _get_bbox_color(self, label):
         rect_label_color = self.layer.get_color(label).tolist()
@@ -521,44 +522,54 @@ class RectangleWithLabel(Rectangle):
         self.score = score
         self._orig_center = center  # (y_row, x_col)
         self._orig_hw = height, width
+        self._show_id_pattern = show_id_pattern
 
         if dims_displayed[0] > dims_displayed[1]:
             width, height = height, width
-        center_pos = center[dims_displayed[::-1]]
-
-        if show_id_pattern:
-            font_size = 14
-            id_font_offset_y = 0
-            color = "yellow"
-            params = [x for x in show_id_pattern.split(";") if len(x) > 3]
-            if len(params) > 1:
-                show_id_pattern = params[0]
-                for param in params[1:]:
-                    param_name, param_value = param.split("=")
-                    if param_name == "font_size":
-                        font_size = int(param_value)
-                    elif param_name == "color":
-                        color = param_value
-                    elif param_name == "id_font_offset_y":
-                        id_font_offset_y = float(param_value)
-
-            self._id_font_offset_y = font_size * id_font_offset_y
-            self.text_visual.text = show_id_pattern.format(
-                id=rect_id, label=label, score=score
-            )
-            self.text_visual.color = color
-            self.text_visual.pos = [
-                center_pos[0],
-                center_pos[1] - 0.5 * height - self._id_font_offset_y,
-            ]
-            self.text_visual.font_size = font_size
-            self.text_visual.bold = True
-
-        self.freeze()
-        self.center = center_pos
+        self.center = center[dims_displayed[::-1]]
         self.width = width
         self.height = height
         self.border_color = border_color
+
+        self._setup_text_label()
+        self.freeze()
+
+    def refresh_text_label(self) -> None:
+        if not self._show_id_pattern or "{label}" not in self._show_id_pattern:
+            return
+        self._setup_text_label()
+
+    def _setup_text_label(self) -> None:
+        if not self._show_id_pattern:
+            return
+
+        show_id_pattern = self._show_id_pattern
+        font_size = 14
+        id_font_offset_y = 0
+        color = "yellow"
+        params = [x for x in show_id_pattern.split(";") if len(x) > 3]
+        if len(params) > 1:
+            show_id_pattern = params[0]
+            for param in params[1:]:
+                param_name, param_value = param.split("=")
+                if param_name == "font_size":
+                    font_size = int(param_value)
+                elif param_name == "color":
+                    color = param_value
+                elif param_name == "id_font_offset_y":
+                    id_font_offset_y = float(param_value)
+
+        self._id_font_offset_y = font_size * id_font_offset_y
+        self.text_visual.text = show_id_pattern.format(
+            id=self.id, label=self.label, score=self.score
+        )
+        self.text_visual.color = color
+        self.text_visual.pos = [
+            self.center[0],
+            self.center[1] - 0.5 * self.height - self._id_font_offset_y,
+        ]
+        self.text_visual.font_size = font_size
+        self.text_visual.bold = True
 
     def set_rect(self, dims_displayed, center=None, height=None, width=None):
         if center is not None:
