@@ -572,8 +572,12 @@ class RectangleWithLabel(Rectangle):
                     id_font_offset_y = float(param_value)
 
         self._id_font_offset_y = font_size * id_font_offset_y
+        score_to_show = self.score
+        if score_to_show is None and "{score" in show_id_pattern:
+            score_to_show = -1
+
         self.text_visual.text = show_id_pattern.format(
-            id=self.id, label=self.label, score=self.score
+            id=self.id, label=self.label, score=score_to_show
         )
         self.text_visual.color = color
         self.text_visual.pos = [
