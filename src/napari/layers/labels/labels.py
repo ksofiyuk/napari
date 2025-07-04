@@ -1,7 +1,7 @@
 import typing
 import warnings
 from collections import deque
-from collections.abc import Callable, Generator, Sequence
+from collections.abc import Callable, Generator, Iterable, Sequence
 from contextlib import contextmanager
 from typing import Any, ClassVar, Optional
 
@@ -131,6 +131,10 @@ class Labels(ScalarFieldBase):
         Properties defining plane rendering in 3D. Properties are defined in
         data coordinates. Valid dictionary keys are
         {'position', 'normal', 'thickness', and 'enabled'}.
+    predefined_labels : list[int] or dict[int, str] or None
+        If it is provided, only the specified labels can be selected.
+        They can also be specified using dict, which has names for each label.
+        If the background label is not in the set, it will be added automatically.
     projection_mode : str
         How data outside the viewed dimensions but inside the thick Dims slice will
         be projected onto the viewed dimensions
@@ -183,6 +187,10 @@ class Labels(ScalarFieldBase):
     num_colors : int
         Number of unique colors to use in colormap. DEPRECATED: set
         ``colormap`` directly, using `napari.utils.colormaps.label_colormap`.
+    predefined_labels : list[int] or dict[int, str] or None
+        If it is provided, only the specified labels can be selected.
+        They can also be specified using dict, which has names for each label.
+        If the background label is not in the set, it will be added automatically.
     features : Dataframe-like
         Features table where each row corresponds to a label and each column
         is a feature. The first row corresponds to the background label.
@@ -318,6 +326,7 @@ class Labels(ScalarFieldBase):
         name=None,
         opacity=0.7,
         plane=None,
+        predefined_labels=None,
         projection_mode='none',
         properties=None,
         rendering='iso_categorical',
@@ -383,6 +392,7 @@ class Labels(ScalarFieldBase):
             labels_update=Event,
             n_edit_dimensions=Event,
             paint=Event,
+            predefined_labels=Event,
             preserve_labels=Event,
             properties=Event,
             selected_label=Event,
@@ -400,6 +410,10 @@ class Labels(ScalarFieldBase):
         if with_bb_overlay:
             self._overlays['bounding_boxes'] = LabelsBoundingBoxesOverlay()
 
+        self._selected_label = 1
+        self._predefined_labels: dict[int, str | None] | None = None
+        self.predefined_labels = predefined_labels
+
         self._feature_table = _FeatureTable.from_layer(
             features=features, properties=properties
         )
@@ -411,7 +425,6 @@ class Labels(ScalarFieldBase):
 
         self._iso_gradient_mode = IsoCategoricalGradientMode(iso_gradient_mode)
 
-        self._selected_label = 1
         self.colormap.selection = self._selected_label
         self.colormap.use_selection = self._show_selected_label
         self._prev_selected_label = None
@@ -438,6 +451,36 @@ class Labels(ScalarFieldBase):
     @property
     def bb_overlay(self) -> Optional['LabelsBoundingBoxesOverlay']:
         return self._overlays.get('bounding_boxes', None)
+
+    @property
+    def predefined_labels(self) -> dict[int, str | None] | None:
+        return self._predefined_labels
+
+    @predefined_labels.setter
+    def predefined_labels(
+        self, predefined_labels: Iterable[int] | dict[int, str | None] | None
+    ) -> None:
+        if (
+            not isinstance(predefined_labels, dict)
+            and predefined_labels is not None
+        ):
+            predefined_labels = dict.fromkeys(predefined_labels)
+
+        if predefined_labels:
+            predefined_labels = predefined_labels.copy()
+            if (
+                predefined_labels.get(self.colormap.background_value, None)
+                is None
+            ):
+                predefined_labels[self.colormap.background_value] = (
+                    'background'
+                )
+
+            if self.selected_label not in predefined_labels:
+                self.selected_label = sorted(predefined_labels)[0]
+
+        self._predefined_labels = predefined_labels
+        self.events.predefined_labels()
 
     @property
     def rendering(self):
@@ -719,6 +762,7 @@ class Labels(ScalarFieldBase):
                 'data': self.data,
                 'features': self.features,
                 'colormap': self.colormap,
+                'predefined_labels': self.predefined_labels,
             }
         )
         return state
@@ -732,6 +776,13 @@ class Labels(ScalarFieldBase):
     def selected_label(self, selected_label):
         if selected_label == self.selected_label:
             return
+
+        if (
+            self.predefined_labels
+            and selected_label not in self.predefined_labels
+        ):
+            self.predefined_labels[selected_label] = 'unspecified'
+
         # when setting the label to the background, store the previous
         # otherwise, clear it
         if selected_label == self.colormap.background_value:
@@ -1583,6 +1634,12 @@ class Labels(ScalarFieldBase):
             )
         )
 
+    def get_label_name(self, label: int) -> str | None:
+        """Return the corresponding label name if it is specified."""
+        if self.predefined_labels is not None:
+            return self.predefined_labels.get(label, None)
+        return None
+
     def _get_properties(
         self,
         position,
@@ -1591,8 +1648,7 @@ class Labels(ScalarFieldBase):
         dims_displayed: list[int] | None = None,
         world: bool = False,
     ) -> list:
-        if len(self._label_index) == 0 or self.features.shape[1] == 0:
-            return []
+        properties: list[str] = []
 
         value = self.get_value(
             position,
@@ -1602,16 +1658,22 @@ class Labels(ScalarFieldBase):
         )
         # if the cursor is not outside the image or on the background
         if value is None:
-            return []
+            return properties
 
         label_value: int = typing.cast(
             int, value[1] if self.multiscale else value
         )
+        if (label_name := self.get_label_name(label_value)) is not None:
+            properties.append(f'{label_name}')
+
+        if len(self._label_index) == 0 or self.features.shape[1] == 0:
+            return properties
+
         if label_value not in self._label_index:
-            return [trans._('[No Properties]')]
+            return properties + [trans._('[No Properties]')]
 
         idx = self._label_index[label_value]
-        return [
+        return properties + [
             f'{k}: {v[idx]}'
             for k, v in self.features.items()
             if k != 'index'
