@@ -19,6 +19,9 @@ from napari._vispy.overlays.interaction_box import (
     VispySelectionBoxOverlay,
     VispyTransformBoxOverlay,
 )
+from napari._vispy.overlays.labels_bouding_boxes import (
+    VispyLabelsBoundingBoxesOverlay,
+)
 from napari._vispy.overlays.labels_polygon import VispyLabelsPolygonOverlay
 from napari._vispy.overlays.scale_bar import VispyScaleBarOverlay
 from napari._vispy.overlays.text import VispyTextOverlay
@@ -29,6 +32,7 @@ __all__ = [
     'VispyAxesOverlay',
     'VispyCamera',
     'VispyCanvas',
+    'VispyLabelsBoundingBoxesOverlay',
     'VispyLabelsPolygonOverlay',
     'VispyScaleBarOverlay',
     'VispySelectionBoxOverlay',

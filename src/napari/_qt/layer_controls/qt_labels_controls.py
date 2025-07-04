@@ -218,6 +218,13 @@ class QtLabelsControls(QtLayerControls):
             True,
             'activate_labels_polygon_mode',
         )
+        self.bounding_box_button = self._radio_button(
+            layer,
+            'labels_bounding_box',
+            Mode.BOUNDING_BOX,
+            True,
+            'activate_labels_bounding_box_mode',
+        )
         self.fill_button = self._radio_button(
             layer,
             'fill',
@@ -235,12 +242,18 @@ class QtLabelsControls(QtLayerControls):
         # don't bind with action manager as this would remove "Toggle with {shortcut}"
         self._on_editable_or_visible_change()
 
-        self.button_grid.addWidget(self.colormapUpdate, 0, 0)
-        self.button_grid.addWidget(self.erase_button, 0, 1)
-        self.button_grid.addWidget(self.paint_button, 0, 2)
-        self.button_grid.addWidget(self.polygon_button, 0, 3)
-        self.button_grid.addWidget(self.fill_button, 0, 4)
-        self.button_grid.addWidget(self.pick_button, 0, 5)
+        button_widgets = [
+            self.colormapUpdate,
+            self.erase_button,
+            self.polygon_button,
+            self.fill_button,
+            self.pick_button,
+        ]
+        if layer.bb_overlay:
+            button_widgets.insert(3, self.bounding_box_button)
+
+        for index, button_widget in enumerate(button_widgets):
+            self.button_grid.addWidget(button_widget, 0, index)
 
         renderComboBox = QEnumComboBox(enum_class=LabelsRendering)
         renderComboBox.setCurrentEnum(LabelsRendering(self.layer.rendering))
@@ -524,12 +537,16 @@ class QtLabelsControls(QtLayerControls):
         self.isoGradientLabel.setVisible(show_3d_widgets)
         self._on_editable_or_visible_change()
         self._set_polygon_tool_state()
+        self.bounding_box_button.setEnabled(self._is_polygon_tool_enabled())
         super()._on_ndisplay_changed()
 
     def _set_polygon_tool_state(self):
         if hasattr(self, 'polygon_button'):
             set_widgets_enabled_with_opacity(
                 self, [self.polygon_button], self._is_polygon_tool_enabled()
+            )
+            self.bounding_box_button.setEnabled(
+                self._is_polygon_tool_enabled()
             )
 
     def _is_polygon_tool_enabled(self):

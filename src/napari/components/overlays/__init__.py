@@ -10,6 +10,9 @@ from napari.components.overlays.interaction_box import (
     SelectionBoxOverlay,
     TransformBoxOverlay,
 )
+from napari.components.overlays.labels_bounding_boxes import (
+    LabelsBoundingBoxesOverlay,
+)
 from napari.components.overlays.labels_polygon import LabelsPolygonOverlay
 from napari.components.overlays.scale_bar import ScaleBarOverlay
 from napari.components.overlays.text import TextOverlay
@@ -19,6 +22,7 @@ __all__ = [
     'BoundingBoxOverlay',
     'BrushCircleOverlay',
     'CanvasOverlay',
+    'LabelsBoundingBoxesOverlay',
     'LabelsPolygonOverlay',
     'Overlay',
     'ScaleBarOverlay',

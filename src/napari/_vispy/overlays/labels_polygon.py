@@ -101,6 +101,7 @@ class VispyLabelsPolygonOverlay(LayerOverlayMixin, VispySceneOverlay):
 
     def _on_enabled_change(self):
         if self.overlay.enabled:
+            self._update_color()
             self._on_points_change()
 
     def _on_points_change(self):
@@ -141,6 +142,8 @@ class VispyLabelsPolygonOverlay(LayerOverlayMixin, VispySceneOverlay):
         self._line.set_data(color=border_color)
 
     def _update_color(self):
+        if not self.overlay.enabled:
+            return
         layer = self.layer
         if layer._selected_label == layer.colormap.background_value:
             self._set_color((1, 0, 0, 0))

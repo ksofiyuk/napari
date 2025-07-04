@@ -3,10 +3,7 @@ import warnings
 from collections import deque
 from collections.abc import Callable, Generator, Sequence
 from contextlib import contextmanager
-from typing import (
-    Any,
-    ClassVar,
-)
+from typing import Any, ClassVar, Optional
 
 import numpy as np
 import numpy.typing as npt
@@ -62,6 +59,11 @@ from napari.utils.naming import magic_name
 from napari.utils.translations import trans
 
 __all__ = ('Labels',)
+
+if typing.TYPE_CHECKING:
+    from napari.components.overlays.labels_bounding_boxes import (
+        LabelsBoundingBoxesOverlay,
+    )
 
 
 class Labels(ScalarFieldBase):
@@ -267,6 +269,7 @@ class Labels(ScalarFieldBase):
         Mode.FILL: draw,
         Mode.ERASE: draw,
         Mode.POLYGON: no_op,  # the overlay handles mouse events in this mode
+        Mode.BOUNDING_BOX: no_op,  # the overlay handles mouse events in this mode
     }
 
     brush_size_on_mouse_move = BrushSizeOnMouseMove(min_brush_size=1)
@@ -281,6 +284,7 @@ class Labels(ScalarFieldBase):
         Mode.FILL: no_op,
         Mode.ERASE: brush_size_on_mouse_move,
         Mode.POLYGON: no_op,  # the overlay handles mouse events in this mode
+        Mode.BOUNDING_BOX: no_op,  # the overlay handles mouse events in this mode
     }
 
     _cursor_modes: ClassVar[dict[Mode, str]] = {  # type: ignore[assignment]
@@ -291,6 +295,7 @@ class Labels(ScalarFieldBase):
         Mode.FILL: 'cross',
         Mode.ERASE: 'circle',
         Mode.POLYGON: 'cross',
+        Mode.BOUNDING_BOX: 'standard',
     }
 
     _history_limit = 100
@@ -322,6 +327,7 @@ class Labels(ScalarFieldBase):
         translate=None,
         units=None,
         visible=True,
+        with_bb_overlay=False,
     ) -> None:
         if name is None and data is not None:
             name = magic_name(data)
@@ -383,11 +389,16 @@ class Labels(ScalarFieldBase):
             show_selected_label=Event,
         )
 
+        from napari.components.overlays.labels_bounding_boxes import (
+            LabelsBoundingBoxesOverlay,
+        )
         from napari.components.overlays.labels_polygon import (
             LabelsPolygonOverlay,
         )
 
         self._overlays.update({'polygon': LabelsPolygonOverlay()})
+        if with_bb_overlay:
+            self._overlays['bounding_boxes'] = LabelsBoundingBoxesOverlay()
 
         self._feature_table = _FeatureTable.from_layer(
             features=features, properties=properties
@@ -423,6 +434,10 @@ class Labels(ScalarFieldBase):
         # Trigger generation of view slice and thumbnail
         self.refresh()
         self._reset_editable()
+
+    @property
+    def bb_overlay(self) -> Optional['LabelsBoundingBoxesOverlay']:
+        return self._overlays.get('bounding_boxes', None)
 
     @property
     def rendering(self):
@@ -791,6 +806,8 @@ class Labels(ScalarFieldBase):
             return mode
 
         self._overlays['polygon'].enabled = mode == Mode.POLYGON
+        if self.bb_overlay:
+            self.bb_overlay.active = mode == Mode.BOUNDING_BOX
         if mode in {Mode.PAINT, Mode.ERASE}:
             self.cursor_size = self._calculate_cursor_size()
 
