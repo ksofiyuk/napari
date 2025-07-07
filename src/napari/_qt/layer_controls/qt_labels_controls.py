@@ -245,6 +245,7 @@ class QtLabelsControls(QtLayerControls):
         button_widgets = [
             self.colormapUpdate,
             self.erase_button,
+            self.paint_button,
             self.polygon_button,
             self.fill_button,
             self.pick_button,
