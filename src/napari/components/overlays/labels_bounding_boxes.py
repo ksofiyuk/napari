@@ -1,4 +1,4 @@
-from typing import ClassVar, Optional
+from typing import Optional
 
 from napari.components.overlays.base import SceneOverlay
 
@@ -6,7 +6,7 @@ from napari.components.overlays.base import SceneOverlay
 class LabelsBoundingBoxesOverlay(SceneOverlay):
     active: bool = False
     enabled: bool = True
-    bounding_boxes: ClassVar[list] = []
+    bounding_boxes: list = []  # noqa
     show_id_pattern: Optional[str] = None
     right_click_relabelling: bool = False
 
