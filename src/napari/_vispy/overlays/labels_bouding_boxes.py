@@ -4,6 +4,7 @@ from typing import Optional
 import numpy as np
 import numpy.typing as npt
 from vispy.scene.visuals import Compound, Markers, Rectangle, Text
+from vispy.visuals.filters.clipper import Clipper
 
 from napari._vispy.overlays.base import LayerOverlayMixin, VispySceneOverlay
 from napari.components.overlays import LabelsBoundingBoxesOverlay
@@ -67,7 +68,6 @@ class VispyLabelsBoundingBoxesOverlay(LayerOverlayMixin, VispySceneOverlay):
 
         layer.events.selected_label.connect(self._on_selected_label_change)
         layer.events.colormap.connect(self._update_color)
-        layer.events.color_mode.connect(self._update_color)
         layer.events.opacity.connect(self._update_opacity)
 
         self.reset()
@@ -682,3 +682,10 @@ class RectangleWithLabel(Rectangle):
         if len(self._subvisuals) == 2 and self.text_visual is not None:
             self._subvisuals.append(visual)
             super().add_subvisual(self.text_visual)
+
+    def detach(self, filt, view=None):
+        # For some reason, Clipper is not set to children of this class
+        # It results in an error when the parent class tries to detach Clipper
+        if isinstance(filt, Clipper):
+            return
+        super().detach(filt, view)
