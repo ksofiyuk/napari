@@ -813,10 +813,24 @@ class VispyCanvas:
         # reparenting does not work well in a few cases (we end up with overlay visuals
         # "clipping" through the canvas edges) so we just remake them
         # whenever we need to change them.
-        self._remove_layer_overlays(layer)
 
         overlay_models = layer._overlays.values()
+        overlays_to_remove: list[Overlay] = [
+            overlay
+            for overlay, vispy_overlay in self._layer_overlay_to_visual[
+                layer
+            ].items()
+            if overlay not in overlay_models
+        ]
+
+        for overlay in overlays_to_remove:
+            vispy_overlay = self._layer_overlay_to_visual[layer].pop(overlay)
+            vispy_overlay.close()
+
         for overlay in overlay_models:
+            if overlay in self._layer_overlay_to_visual[layer]:
+                continue
+
             if isinstance(overlay, CanvasOverlay):
                 if self.viewer.grid.enabled:
                     row, col = self.viewer.grid.position(
