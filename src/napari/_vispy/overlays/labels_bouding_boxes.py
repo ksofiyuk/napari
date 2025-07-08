@@ -1,15 +1,15 @@
 from enum import auto
-from typing import Optional
+from typing import ClassVar, Optional
 
 import numpy as np
 import numpy.typing as npt
 from vispy.scene.visuals import Compound, Markers, Rectangle, Text
-from vispy.visuals.filters.clipper import Clipper
 
 from napari._vispy.overlays.base import LayerOverlayMixin, VispySceneOverlay
 from napari.components.overlays import LabelsBoundingBoxesOverlay
 from napari.layers import Labels
 from napari.layers.labels._labels_utils import mouse_event_to_labels_coordinate
+from napari.utils.events import disconnect_events
 from napari.utils.misc import StringEnum
 
 
@@ -27,6 +27,13 @@ class Operation(StringEnum):
 
 
 class VispyLabelsBoundingBoxesOverlay(LayerOverlayMixin, VispySceneOverlay):
+    _available_rect_visuals: ClassVar[
+        dict[bool, list['RectangleWithLabel']]
+    ] = {
+        False: [],
+        True: [],
+    }
+
     def __init__(
         self,
         *,
@@ -48,10 +55,6 @@ class VispyLabelsBoundingBoxesOverlay(LayerOverlayMixin, VispySceneOverlay):
         self._label_before_selection: Optional[int] = None
         self._undo_history = []
         self._redo_history = []
-        self._available_rect_visuals: dict[bool, list[RectangleWithLabel]] = {
-            False: [],
-            True: [],
-        }
 
         super().__init__(
             node=Compound([self._bounding_boxes, self._drag_nodes]),
@@ -64,8 +67,8 @@ class VispyLabelsBoundingBoxesOverlay(LayerOverlayMixin, VispySceneOverlay):
         self.overlay.events.bounding_boxes.connect(
             self._on_bounding_boxes_change
         )
-        self.layer.mouse_drag_callbacks.append(self._on_mouse_press_and_drag)
 
+        layer.mouse_drag_callbacks.append(self._on_mouse_press_and_drag)
         layer.events.selected_label.connect(self._on_selected_label_change)
         layer.events.colormap.connect(self._update_color)
         layer.events.opacity.connect(self._update_opacity)
@@ -102,11 +105,7 @@ class VispyLabelsBoundingBoxesOverlay(LayerOverlayMixin, VispySceneOverlay):
         self._undo_history = []
         self._redo_history = []
 
-        current_rects: list[RectangleWithLabel] = (
-            self._bounding_boxes._subvisuals[:]
-        )
-        for x in current_rects:
-            self._remove_rect_visual(x)
+        self._remove_all_rect_visuals()
 
         for bounding_box_dict in self.overlay.bounding_boxes:
             rect_visual = self._create_rect(
@@ -168,7 +167,7 @@ class VispyLabelsBoundingBoxesOverlay(LayerOverlayMixin, VispySceneOverlay):
             )
 
     def _create_new_bounding_box(self, event, start_pos):
-        if self.layer.selected_label == self.layer._background_label:
+        if self.layer.selected_label == self.layer.colormap.background_value:
             return
 
         self._state = InteractionState.BBOX_CREATING
@@ -374,6 +373,13 @@ class VispyLabelsBoundingBoxesOverlay(LayerOverlayMixin, VispySceneOverlay):
             self._add_operation_to_history(Operation.REMOVE_BB, bounding_box)
         self._update_bounding_boxes()
 
+    def _remove_all_rect_visuals(self):
+        current_rects: list[RectangleWithLabel] = (
+            self._bounding_boxes._subvisuals[:]
+        )
+        for x in current_rects:
+            self._remove_rect_visual(x)
+
     def _remove_rect_visual(self, bb: 'RectangleWithLabel') -> None:
         self._bounding_boxes.remove_subvisual(bb)
         self._available_rect_visuals[bb.text_visual is not None].append(bb)
@@ -482,6 +488,13 @@ class VispyLabelsBoundingBoxesOverlay(LayerOverlayMixin, VispySceneOverlay):
 
     def reset(self):
         super().reset()
+
+    def close(self):
+        disconnect_events(self.overlay.events, self)
+        disconnect_events(self.layer.events, self)
+        self.layer.mouse_drag_callbacks.remove(self._on_mouse_press_and_drag)
+        self._remove_all_rect_visuals()
+        super().close()
 
 
 class RectangleWithLabel(Rectangle):
@@ -682,10 +695,3 @@ class RectangleWithLabel(Rectangle):
         if len(self._subvisuals) == 2 and self.text_visual is not None:
             self._subvisuals.append(visual)
             super().add_subvisual(self.text_visual)
-
-    def detach(self, filt, view=None):
-        # For some reason, Clipper is not set to children of this class
-        # It results in an error when the parent class tries to detach Clipper
-        if isinstance(filt, Clipper):
-            return
-        super().detach(filt, view)
