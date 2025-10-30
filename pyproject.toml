@@ -69,7 +69,7 @@ dependencies = [
     "toolz>=0.11.0",
     "tqdm>=4.56.0",
     "typing_extensions>=4.12",
-    "vispy>=0.15.2,<0.16",
+    "vispy @ git+https://github.com/vispy/vispy.git@7b6b11c9d050bf2cc6f77844252e737d2b060579",  # vispy-0.15.2.dev from 13.10.2025
     "wrapt>=1.13.3",
 ]
 dynamic = [
