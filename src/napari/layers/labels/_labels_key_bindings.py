@@ -105,7 +105,7 @@ def decrease_label_id(layer: Labels):
         except WrongSelectedLabelError as e:
             show_warning(f'{e.text}\n{CONVERT_TEXT}')
     else:
-        labels = sorted(layer.predefined_labels.keys())
+        labels = list(layer.predefined_labels)
         prev_index = labels.index(layer.selected_label) - 1
         layer.selected_label = labels[max(prev_index, 0)]
 
@@ -118,7 +118,7 @@ def increase_label_id(layer: Labels):
         except WrongSelectedLabelError as e:
             show_warning(f'{e.text}\n{CONVERT_TEXT}')
     else:
-        labels = sorted(layer.predefined_labels.keys())
+        labels = list(layer.predefined_labels)
         next_index = labels.index(layer.selected_label) + 1
         layer.selected_label = labels[min(next_index, len(labels) - 1)]
 

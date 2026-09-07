@@ -185,7 +185,7 @@ class Labels(ScalarFieldBase):
         Properties defining plane rendering in 3D. Properties are defined in
         data coordinates. Valid dictionary keys are
         {'position', 'normal', 'thickness', and 'enabled'}.
-    predefined_labels : list[int] or dict[int, str] or None
+    predefined_labels : list[int] or dict[int, str | None] or None
         If it is provided, only the specified labels can be selected.
         They can also be specified using dict, which has names for each label.
         If the background label is not in the set, it will be added automatically.
@@ -245,7 +245,7 @@ class Labels(ScalarFieldBase):
     num_colors : int
         Number of unique colors to use in colormap. DEPRECATED: set
         ``colormap`` directly, using `napari.utils.colormaps.label_colormap`.
-    predefined_labels : list[int] or dict[int, str] or None
+    predefined_labels : dict[int, str | None] or None
         If it is provided, only the specified labels can be selected.
         They can also be specified using dict, which has names for each label.
         If the background label is not in the set, it will be added automatically.
@@ -535,11 +535,15 @@ class Labels(ScalarFieldBase):
                     'background'
                 )
 
-            if self.selected_label not in predefined_labels:
-                self.selected_label = sorted(predefined_labels)[0]
+            self._predefined_labels = {
+                k: predefined_labels[k] for k in sorted(predefined_labels)
+            }
 
         self._predefined_labels = predefined_labels
         self.events.predefined_labels()
+
+        if predefined_labels and self.selected_label not in predefined_labels:
+            self.selected_label = next(iter(predefined_labels))
 
     @property
     def rendering(self):
@@ -2417,7 +2421,7 @@ class Labels(ScalarFieldBase):
             return properties
 
         if label_value not in self._label_index:
-            return properties + ['[No Properties]']
+            return ['[No Properties]']
 
         idx = self._label_index[label_value]
         return [
