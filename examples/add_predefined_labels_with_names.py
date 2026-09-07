@@ -13,7 +13,11 @@ import pandas as pd
 from skimage import data
 from skimage.filters import threshold_otsu
 from skimage.measure import label
-from skimage.morphology import closing, remove_small_objects, square
+from skimage.morphology import (
+    closing,
+    footprint_rectangle,
+    remove_small_objects,
+)
 from skimage.segmentation import clear_border
 
 import napari
@@ -22,17 +26,17 @@ image = data.coins()[50:-50, 50:-50]
 
 # apply threshold
 thresh = threshold_otsu(image)
-bw = closing(image > thresh, square(4))
+bw = closing(image > thresh, footprint_rectangle((4, 4)))
 
 # remove artifacts connected to image border
-cleared = remove_small_objects(clear_border(bw), 20)
+cleared = remove_small_objects(clear_border(bw), max_size=20)
 ignored_area = cleared != bw
 
 # label image regions
 label_image = label(cleared).astype('uint8')
 
 # initialise viewer with coins image
-viewer = napari.view_image(image, name='coins', rgb=False)
+viewer, _ = napari.imshow(image, name='coins', rgb=False)
 
 # get the size of each coin (first element is background area)
 label_areas = np.bincount(label_image.ravel())[1:]
