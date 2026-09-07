@@ -384,10 +384,10 @@ def test_multiscale_properties():
 def test_categories():
     """Test predefined labels without names"""
 
-    categories = [10, 20, 30, 255]
+    categories = dict.fromkeys([10, 20, 30, 255])
     labels = Labels(np.zeros((10, 10), dtype=int), categories=categories)
     assert set(labels._categories) == set(
-        categories + [labels.colormap.background_value]
+        set(categories) | {labels.colormap.background_value}
     )
     assert labels._categories[labels.colormap.background_value] == 'background'
     assert (
@@ -398,7 +398,7 @@ def test_categories():
         assert labels.get_label_name(label) is None
 
     labels.selected_label = 5
-    assert labels.get_label_name(5) == 'unspecified'
+    assert labels.get_label_name(5) is None
 
     assert (set(labels._categories) - set(categories)) == {0, 5}
 

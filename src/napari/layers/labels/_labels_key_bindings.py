@@ -107,7 +107,7 @@ def decrease_label_id(layer: Labels):
     else:
         labels = list(layer.categories)
         prev_index = labels.index(layer.selected_label) - 1
-        layer.selected_label = labels[max(prev_index, 0)]
+        layer.selected_label = labels[prev_index % len(labels)]
 
 
 @register_label_action('Select the next label')
@@ -120,7 +120,7 @@ def increase_label_id(layer: Labels):
     else:
         labels = list(layer.categories)
         next_index = labels.index(layer.selected_label) + 1
-        layer.selected_label = labels[min(next_index, len(labels) - 1)]
+        layer.selected_label = labels[next_index % len(labels)]
 
 
 @register_label_action(

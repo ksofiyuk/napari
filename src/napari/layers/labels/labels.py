@@ -146,6 +146,10 @@ class Labels(ScalarFieldBase):
     cache : bool
         Whether slices of out-of-core datasets should be cached upon retrieval.
         Currently, this only applies to dask arrays.
+    categories : dict[int, str | None] or None
+        Predefines list of categories (named labels) available for annotation.
+        When set, the layer controls and shortcuts will adapt and assume that only this
+        limited set of named labels can be used for annotation.
     colormap : CyclicLabelColormap or DirectLabelColormap or None
         Colormap to use for the labels. If None, a random colormap will be
         used.
@@ -185,10 +189,6 @@ class Labels(ScalarFieldBase):
         Properties defining plane rendering in 3D. Properties are defined in
         data coordinates. Valid dictionary keys are
         {'position', 'normal', 'thickness', and 'enabled'}.
-    categories : dict[int, str | None] or None
-        Predefines list of categories (named labels) available for annotation.
-        When set, the layer controls and shortcuts will adapt and assume that only this
-        limited set of named labels can be used for annotation.
     projection_mode : str
         How data outside the viewed dimensions but inside the thick Dims slice will
         be projected onto the viewed dimensions
@@ -371,6 +371,7 @@ class Labels(ScalarFieldBase):
         axis_labels=None,
         blending='translucent',
         cache=True,
+        categories=None,
         colormap=None,
         depiction='volume',
         experimental_clipping_planes=None,
@@ -381,7 +382,6 @@ class Labels(ScalarFieldBase):
         name=None,
         opacity=0.7,
         plane=None,
-        categories=None,
         projection_mode='none',
         properties=None,
         rendering='iso_categorical',
@@ -522,7 +522,7 @@ class Labels(ScalarFieldBase):
             if categories.get(self.colormap.background_value, None) is None:
                 categories[self.colormap.background_value] = 'background'
 
-            self._categories = {k: categories[k] for k in sorted(categories)}
+            categories = {k: categories[k] for k in sorted(categories)}
 
         self._categories = categories
         self.events.categories()
