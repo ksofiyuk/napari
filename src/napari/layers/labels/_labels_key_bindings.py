@@ -98,7 +98,7 @@ def swap_selected_and_background_labels(layer: Labels) -> None:
 
 
 @register_label_action('Select the previous label')
-def decrease_label_id(layer: Labels):
+def decrease_label_id(layer: Labels) -> None:
     if layer.categories is None:
         try:
             layer.selected_label -= 1
@@ -111,7 +111,7 @@ def decrease_label_id(layer: Labels):
 
 
 @register_label_action('Select the next label')
-def increase_label_id(layer: Labels):
+def increase_label_id(layer: Labels) -> None:
     if layer.categories is None:
         try:
             layer.selected_label += 1
