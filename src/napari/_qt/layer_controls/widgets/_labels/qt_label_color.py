@@ -126,7 +126,7 @@ class QtLabelSpinBox(QWidget):
             self.spinbox.setRange(*dtype_lims)
 
 
-class QtPredefinedLabelCombobox(QComboBox):
+class QtCategoriesComboBox(QComboBox):
     def __init__(self, layer, size: int = 24) -> None:
         super().__init__()
         self.layer = layer
@@ -140,44 +140,42 @@ class QtPredefinedLabelCombobox(QComboBox):
         self.currentTextChanged.connect(self.update_selected)
 
         self.layer.events.selected_label.connect(self._on_selection_change)
-        self.layer.events.predefined_labels.connect(
-            self._on_predefined_labels_change
-        )
+        self.layer.events.categories.connect(self._on_categories_change)
         self.layer.events.colormap.connect(self._on_color_change)
 
         self._on_color_change()
 
     def _on_selection_change(self):
         selected = self.layer.selected_label
-        predefined = self.layer.predefined_labels
-        if predefined is None:
+        categories = self.layer.categories
+        if categories is None:
             return
 
         if selected not in self._current_elements:
-            # layer.predefined_labels auto-includes new selected labels that were
+            # layer.categories auto-includes new selected labels that were
             # previously undefined, so we just need to rebuild
-            self._on_predefined_labels_change()
+            self._on_categories_change()
 
         item_index = self._current_elements.index(selected)
         with qt_signals_blocked(self):
             self.setCurrentIndex(item_index)
 
     def update_selected(self):
-        if self.layer.predefined_labels is not None:
+        if self.layer.categories is not None:
             self.layer.selected_label = self._current_elements[
                 self.currentIndex()
             ]
 
     def _on_color_change(self):
-        self._on_predefined_labels_change()
+        self._on_categories_change()
         self._on_selection_change()
 
-    def _on_predefined_labels_change(self):
+    def _on_categories_change(self):
         self._current_elements = []
-        if self.layer.predefined_labels is None:
+        if self.layer.categories is None:
             return
 
-        labels = self.layer.predefined_labels
+        labels = self.layer.categories
 
         with qt_signals_blocked(self):
             for i, (label, name) in enumerate(labels.items()):
@@ -222,15 +220,17 @@ class QNewNamedLabelDialog(QtPopup):
 
     def add_label(self):
         new_name = self.name_edit.text()
-        predefined_labels = self.layer.predefined_labels.copy()
+        categories = self.layer.categories.copy()
         if not new_name:
             return
-        if new_name in predefined_labels:
-            raise ValueError(f'"{new_name}" is already in predefined_labels')
+        if new_name in categories:
+            raise ValueError(
+                f'"{new_name}" is already in the categories dictionary ({self.layer.categories})'
+            )
         next_unused = self.layer.next_unused()
         self.layer.colormap.color_dict[next_unused] = self.color_edit.color
-        predefined_labels[next_unused] = new_name
-        self.layer.predefined_labels = predefined_labels
+        categories[next_unused] = new_name
+        self.layer.categories = categories
         self.layer.selected_label = next_unused
 
         self.close()
@@ -269,7 +269,7 @@ class QtCurrentLabelControl(QtWidgetControlsBase):
         super().__init__(parent, layer)
 
         self.selection_spinbox = QtLabelSpinBox(layer)
-        self.selection_combobox = QtPredefinedLabelCombobox(layer)
+        self.selection_combobox = QtCategoriesComboBox(layer)
 
         self.new_label_button = QPushButton()
         self.new_label_button.setText('new')
@@ -288,13 +288,11 @@ class QtCurrentLabelControl(QtWidgetControlsBase):
         self.current_label_row.setLayout(color_layout)
         self.current_label_row.setProperty('foreground', 'true')
 
-        self._layer.events.predefined_labels.connect(
-            self._on_predefined_labels_change
-        )
-        self._on_predefined_labels_change()
+        self._layer.events.categories.connect(self._on_categories_change)
+        self._on_categories_change()
 
-    def _on_predefined_labels_change(self) -> None:
-        if self._layer.predefined_labels is None:
+    def _on_categories_change(self) -> None:
+        if self._layer.categories is None:
             self.selection_combobox.setVisible(False)
             self.selection_spinbox.setVisible(True)
         else:
@@ -303,7 +301,7 @@ class QtCurrentLabelControl(QtWidgetControlsBase):
 
     def _on_new_button_click(self):
         """Select a new label for the labels layer when the button is clicked."""
-        if self._layer.predefined_labels is None:
+        if self._layer.categories is None:
             new_label(self._layer)
         else:
             diag = QNewNamedLabelDialog(

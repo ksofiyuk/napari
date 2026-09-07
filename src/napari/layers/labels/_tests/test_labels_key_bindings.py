@@ -76,26 +76,26 @@ def test_label_overflow(monkeypatch):
     show_warning_mock.call_args_list[0][0][0].startswith('The value 256')
 
 
-def test_predefined_labels_switching(labels_data_4d):
-    predefined_labels = [21, 1, 20, 30, 40, 2, 10]
-    labels = Labels(labels_data_4d, predefined_labels=predefined_labels)
-    predefined_labels = sorted(predefined_labels)
+def test_categories_switching(labels_data_4d):
+    categories = [21, 1, 20, 30, 40, 2, 10]
+    labels = Labels(labels_data_4d, categories=categories)
+    categories = sorted(categories)
 
     labels.selected_label = 1
-    for label_id in predefined_labels[1:]:
+    for label_id in categories[1:]:
         increase_label_id(labels)
         assert labels.selected_label == label_id
 
     for _i in range(3):
         increase_label_id(labels)
-        assert labels.selected_label == predefined_labels[-1]
+        assert labels.selected_label == categories[-1]
 
-    for label_id in predefined_labels[::-1][1:]:
+    for label_id in categories[::-1][1:]:
         decrease_label_id(labels)
         assert labels.selected_label == label_id
 
     for _i in range(3):
         decrease_label_id(labels)
         assert labels.selected_label == min(
-            predefined_labels[0], labels.colormap.background_value
+            categories[0], labels.colormap.background_value
         )

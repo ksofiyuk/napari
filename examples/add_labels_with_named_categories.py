@@ -1,8 +1,8 @@
 """
 Add a closed set of labels with names
-========================
+=====================================
 
-Display a labels layer with a closed predefined set of labels
+Display a labels layer with predefined named categories.
 
 .. tags:: layers, analysis
 """
@@ -61,7 +61,7 @@ labels_df = pd.DataFrame.from_dict({
 label_layer = viewer.add_labels(
     label_image,
     name='segmentation',
-    predefined_labels=labels_df['name'].to_dict(),
+    categories=labels_df['name'].to_dict(),
     colormap=labels_df['color'].to_dict(),
 )
 

@@ -25,13 +25,9 @@ _COLOR = DirectLabelColormap(
 
 
 @pytest.fixture
-def make_labels_controls(qtbot, color=None, predefined_labels=None):
-    def _make_labels_controls(
-        color=color, predefined_labels=predefined_labels
-    ):
-        layer = Labels(
-            _LABELS, color=color, predefined_labels=predefined_labels
-        )
+def make_labels_controls(qtbot, color=None, categories=None):
+    def _make_labels_controls(color=color, categories=categories):
+        layer = Labels(_LABELS, color=color, categories=categories)
         qtctrl = QtLabelsControls(layer)
         qtbot.add_widget(qtctrl)
         return layer, qtctrl
@@ -218,15 +214,15 @@ def test_iso_gradient_mode_with_rendering(make_labels_controls):
 
 def test_labels_combobox(make_labels_controls):
     """Tests that QtLabelsCombobox interacts correctly with the Labels layer."""
-    predefined_labels = [10, 20, 30, 40, 50]
-    layer, qtctrl = make_labels_controls(predefined_labels=predefined_labels)
+    categories = [10, 20, 30, 40, 50]
+    layer, qtctrl = make_labels_controls(categories=categories)
 
     qtctrl.labelsCombobox.setCurrentIndex(2)
     assert layer.selected_label == 20
 
     # Check that selected labels matches the correct combobox item
     # and that all the combobox items are created properly
-    for label_id in predefined_labels:
+    for label_id in categories:
         layer.selected_label = label_id
 
         assert qtctrl.labelsCombobox.currentText() == str(label_id)
@@ -240,7 +236,7 @@ def test_labels_combobox(make_labels_controls):
 
     # Check if the icons are updated after setting a new colormap
     layer.new_colormap()
-    for label_id in predefined_labels:
+    for label_id in categories:
         layer.selected_label = label_id
         icon = qtctrl.labelsCombobox.itemIcon(
             qtctrl.labelsCombobox.currentIndex()
@@ -258,13 +254,13 @@ def test_labels_combobox(make_labels_controls):
 
 def test_switching_labels_selection_widget(make_labels_controls):
     """Tests changing the labels selection widget."""
-    predefined_labels = [1, 2, 3]
-    layer, qtctrl = make_labels_controls(predefined_labels=[1, 2, 3])
+    categories = [1, 2, 3]
+    layer, qtctrl = make_labels_controls(categories=[1, 2, 3])
 
     assert qtctrl.layout().indexOf(qtctrl.labelsSpinbox) == -1
     assert qtctrl.layout().indexOf(qtctrl.labelsCombobox) != -1
 
-    layer.predefined_labels = None
+    layer.categories = None
     assert qtctrl.layout().indexOf(qtctrl.labelsCombobox) == -1
     assert qtctrl.layout().indexOf(qtctrl.labelsSpinbox) != -1
 
@@ -274,7 +270,7 @@ def test_switching_labels_selection_widget(make_labels_controls):
     layer.selected_label = 2
     assert qtctrl.labelsSpinbox.selectionSpinBox.value() == 2
 
-    layer.predefined_labels = predefined_labels
+    layer.categories = categories
     assert qtctrl.layout().indexOf(qtctrl.labelsSpinbox) == -1
     assert qtctrl.layout().indexOf(qtctrl.labelsCombobox) != -1
 

@@ -3,7 +3,7 @@ from __future__ import annotations
 import typing
 import warnings
 from collections import deque
-from collections.abc import Callable, Generator, Iterable, Sequence
+from collections.abc import Callable, Generator, Sequence
 from contextlib import contextmanager
 from typing import (
     TYPE_CHECKING,
@@ -185,10 +185,10 @@ class Labels(ScalarFieldBase):
         Properties defining plane rendering in 3D. Properties are defined in
         data coordinates. Valid dictionary keys are
         {'position', 'normal', 'thickness', and 'enabled'}.
-    predefined_labels : list[int] or dict[int, str | None] or None
-        If it is provided, only the specified labels can be selected.
-        They can also be specified using dict, which has names for each label.
-        If the background label is not in the set, it will be added automatically.
+    categories : dict[int, str | None] or None
+        Predefines list of categories (named labels) available for annotation.
+        When set, the layer controls and shortcuts will adapt and assume that only this
+        limited set of named labels can be used for annotation.
     projection_mode : str
         How data outside the viewed dimensions but inside the thick Dims slice will
         be projected onto the viewed dimensions
@@ -245,10 +245,10 @@ class Labels(ScalarFieldBase):
     num_colors : int
         Number of unique colors to use in colormap. DEPRECATED: set
         ``colormap`` directly, using `napari.utils.colormaps.label_colormap`.
-    predefined_labels : dict[int, str | None] or None
-        If it is provided, only the specified labels can be selected.
-        They can also be specified using dict, which has names for each label.
-        If the background label is not in the set, it will be added automatically.
+    categories : dict[int, str | None] or None
+        Predefines list of categories (named labels) available for annotation.
+        When set, the layer controls and shortcuts will adapt and assume that only this
+        limited set of named labels can be used for annotation.
     features : Dataframe-like
         Features table where each row corresponds to a label and each column
         is a feature. The first row corresponds to the background label.
@@ -381,7 +381,7 @@ class Labels(ScalarFieldBase):
         name=None,
         opacity=0.7,
         plane=None,
-        predefined_labels=None,
+        categories=None,
         projection_mode='none',
         properties=None,
         rendering='iso_categorical',
@@ -446,7 +446,7 @@ class Labels(ScalarFieldBase):
             labels_update=Event,
             n_edit_dimensions=Event,
             paint=Event,
-            predefined_labels=Event,
+            categories=Event,
             preserve_labels=Event,
             properties=Event,
             selected_label=Event,
@@ -468,8 +468,8 @@ class Labels(ScalarFieldBase):
         )
 
         self._selected_label = 1
-        self._predefined_labels: dict[int, str | None] | None = None
-        self.predefined_labels = predefined_labels
+        self._categories: dict[int, str | None] | None = None
+        self.categories = categories
 
         self._feature_table = _FeatureTable.from_layer(
             features=features, properties=properties
@@ -512,38 +512,23 @@ class Labels(ScalarFieldBase):
         self._reset_editable()
 
     @property
-    def predefined_labels(self) -> dict[int, str | None] | None:
-        return self._predefined_labels
+    def categories(self) -> dict[int, str | None] | None:
+        return self._categories
 
-    @predefined_labels.setter
-    def predefined_labels(
-        self, predefined_labels: Iterable[int] | dict[int, str | None] | None
-    ) -> None:
-        if (
-            not isinstance(predefined_labels, dict)
-            and predefined_labels is not None
-        ):
-            predefined_labels = dict.fromkeys(predefined_labels)
+    @categories.setter
+    def categories(self, categories: dict[int, str | None] | None) -> None:
+        if categories is not None:
+            categories = categories.copy()
+            if categories.get(self.colormap.background_value, None) is None:
+                categories[self.colormap.background_value] = 'background'
 
-        if predefined_labels:
-            predefined_labels = predefined_labels.copy()
-            if (
-                predefined_labels.get(self.colormap.background_value, None)
-                is None
-            ):
-                predefined_labels[self.colormap.background_value] = (
-                    'background'
-                )
+            self._categories = {k: categories[k] for k in sorted(categories)}
 
-            self._predefined_labels = {
-                k: predefined_labels[k] for k in sorted(predefined_labels)
-            }
+        self._categories = categories
+        self.events.categories()
 
-        self._predefined_labels = predefined_labels
-        self.events.predefined_labels()
-
-        if predefined_labels and self.selected_label not in predefined_labels:
-            self.selected_label = next(iter(predefined_labels))
+        if categories and self.selected_label not in categories:
+            self.selected_label = next(iter(categories))
 
     @property
     def rendering(self):
@@ -819,7 +804,7 @@ class Labels(ScalarFieldBase):
                 'data': self.data,
                 'features': self.features,
                 'colormap': self.colormap,
-                'predefined_labels': self.predefined_labels,
+                'categories': self.categories,
             }
         )
         return state
@@ -861,11 +846,8 @@ class Labels(ScalarFieldBase):
         if selected_label == self.selected_label:
             return
 
-        if (
-            self.predefined_labels
-            and selected_label not in self.predefined_labels
-        ):
-            self.predefined_labels[selected_label] = None
+        if self.categories and selected_label not in self.categories:
+            self.categories[selected_label] = None
 
         self._validate_label_in_range(selected_label)
         # when setting the label to the background, store the previous
@@ -2387,8 +2369,8 @@ class Labels(ScalarFieldBase):
 
     def get_label_name(self, label: int) -> str | None:
         """Return the corresponding label name if it is specified."""
-        if self.predefined_labels is not None:
-            return self.predefined_labels.get(label, None)
+        if self.categories is not None:
+            return self.categories.get(label, None)
         return None
 
     def _get_properties(

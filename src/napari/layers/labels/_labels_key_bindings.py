@@ -99,26 +99,26 @@ def swap_selected_and_background_labels(layer: Labels) -> None:
 
 @register_label_action('Select the previous label')
 def decrease_label_id(layer: Labels):
-    if layer.predefined_labels is None:
+    if layer.categories is None:
         try:
             layer.selected_label -= 1
         except WrongSelectedLabelError as e:
             show_warning(f'{e.text}\n{CONVERT_TEXT}')
     else:
-        labels = list(layer.predefined_labels)
+        labels = list(layer.categories)
         prev_index = labels.index(layer.selected_label) - 1
         layer.selected_label = labels[max(prev_index, 0)]
 
 
 @register_label_action('Select the next label')
 def increase_label_id(layer: Labels):
-    if layer.predefined_labels is None:
+    if layer.categories is None:
         try:
             layer.selected_label += 1
         except WrongSelectedLabelError as e:
             show_warning(f'{e.text}\n{CONVERT_TEXT}')
     else:
-        labels = list(layer.predefined_labels)
+        labels = list(layer.categories)
         next_index = labels.index(layer.selected_label) + 1
         layer.selected_label = labels[min(next_index, len(labels) - 1)]
 
