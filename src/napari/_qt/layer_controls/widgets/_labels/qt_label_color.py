@@ -207,17 +207,12 @@ class QtPredefinedLabelCombobox(QComboBox):
 class QNewNamedLabelDialog(QtPopup):
     def __init__(self, *args, layer, **kwargs):
         super().__init__(*args, **kwargs)
-        self.setProperty('foreground', 'true')
         self.layer = layer
-
-        self.next_unused = layer.next_unused()
-        next_color = layer.get_color(self.next_unused)
-
         self.name_edit = QLineEdit()
         ok_button = QPushButton('OK')
         self.name_edit.returnPressed.connect(ok_button.click)
         ok_button.clicked.connect(self.add_label)
-        self.color_edit = QColorSwatchEdit(initial_color=next_color)
+        self.color_edit = QColorSwatchEdit(initial_color=np.random.rand(3))
 
         layout = QFormLayout()
         layout.addRow('label name:', self.name_edit)
@@ -232,9 +227,11 @@ class QNewNamedLabelDialog(QtPopup):
             return
         if new_name in predefined_labels:
             raise ValueError(f'"{new_name}" is already in predefined_labels')
-        self.layer.colormap.colormap[self.next_unused] = self.color_edit.color
-        predefined_labels[self.next_unused] = new_name
+        next_unused = self.layer.next_unused()
+        self.layer.colormap.color_dict[next_unused] = self.color_edit.color
+        predefined_labels[next_unused] = new_name
         self.layer.predefined_labels = predefined_labels
+        self.layer.selected_label = next_unused
 
         self.close()
 
