@@ -96,7 +96,6 @@ class QtLabelSpinBox(QWidget):
 
         self.spinbox.valueChanged.connect(self.update_selected)
 
-        self.layer.events.selected_label.connect(self._on_selection_change)
         self.layer.events.data.connect(self._on_data_change)
         self.layer.events.colormap.connect(self._on_color_change)
         self.layer.events.selected_label.connect(self._on_selection_change)
@@ -113,6 +112,7 @@ class QtLabelSpinBox(QWidget):
     def _on_selection_change(self) -> None:
         with qt_signals_blocked(self.spinbox):
             self.spinbox.setValue(self.layer.selected_label)
+        self._on_color_change()
 
     def update_selected(self, value: int) -> None:
         self.layer.selected_label = value
@@ -223,7 +223,7 @@ class QNewNamedLabelDialog(QtPopup):
         categories = self.layer.categories.copy()
         if not new_name:
             return
-        if new_name in categories:
+        if new_name in categories.values():
             raise ValueError(
                 f'"{new_name}" is already in the categories dictionary ({self.layer.categories})'
             )
