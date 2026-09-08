@@ -68,7 +68,7 @@ from napari.utils.events import EmitterGroup, Event
 from napari.utils.events.custom_types import Array
 from napari.utils.misc import StringEnum
 from napari.utils.naming import magic_name
-from napari.utils.notifications import show_info
+from napari.utils.notifications import show_info, show_warning
 from napari.utils.status_messages import format_feature_value
 
 if TYPE_CHECKING:
@@ -847,7 +847,11 @@ class Labels(ScalarFieldBase):
             return
 
         if self.categories and selected_label not in self.categories:
-            self.categories[selected_label] = None
+            show_warning(
+                f'"{selected_label}" is not part of the defined categories; '
+                'to select it, first add it to the categories dictionary.'
+            )
+            return
 
         self._validate_label_in_range(selected_label)
         # when setting the label to the background, store the previous
