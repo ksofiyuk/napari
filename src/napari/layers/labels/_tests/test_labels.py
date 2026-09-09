@@ -399,8 +399,9 @@ def test_categories():
 
     labels.selected_label = 5
     assert labels.get_label_name(5) is None
+    assert labels.selected_label != 5
 
-    assert (set(labels._categories) - set(categories)) == {0, 5}
+    assert (set(labels._categories) - set(categories)) == {0}
 
 
 def test_categories_with_names():
