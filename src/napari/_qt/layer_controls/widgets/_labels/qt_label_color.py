@@ -5,6 +5,7 @@ from qtpy.QtWidgets import (
     QComboBox,
     QFormLayout,
     QHBoxLayout,
+    QLabel,
     QLineEdit,
     QPushButton,
     QWidget,
@@ -19,7 +20,10 @@ from napari._qt.layer_controls.widgets.qt_widget_controls_base import (
 from napari._qt.utils import qt_signals_blocked
 from napari._qt.widgets.qt_color_swatch import QColorSwatchEdit
 from napari.layers import Labels
-from napari.layers.labels._labels_key_bindings import new_label
+from napari.layers.labels._labels_key_bindings import (
+    decrease_label_id,
+    new_label,
+)
 from napari.layers.labels._labels_utils import get_dtype
 from napari.utils._dtype import get_dtype_limits
 
@@ -206,34 +210,61 @@ class QNewNamedLabelDialog(QtPopup):
     def __init__(self, *args, layer, **kwargs):
         super().__init__(*args, **kwargs)
         self.layer = layer
+        self.id_edit = QLargeIntSpinBox()
+        self.id_edit.setValue(self.layer.next_unused())
         self.name_edit = QLineEdit()
-        ok_button = QPushButton('OK')
-        self.name_edit.returnPressed.connect(ok_button.click)
-        ok_button.clicked.connect(self.add_label)
-        self.color_edit = QColorSwatchEdit(initial_color=np.random.rand(3))
+        ok_button = QPushButton('Create category')
+        remove_button = QPushButton('Remove category')
+        self.color_edit = QColorSwatchEdit()
 
         layout = QFormLayout()
-        layout.addRow('label name:', self.name_edit)
-        layout.addRow('label color:', self.color_edit)
+        layout.addRow(QLabel('Create (or modify) category:'))
+        layout.addRow('id:', self.id_edit)
+        layout.addRow('name:', self.name_edit)
+        layout.addRow('color:', self.color_edit)
         layout.addRow(ok_button)
+        layout.addRow(remove_button)
         self.frame.setLayout(layout)
+
+        self.id_edit.valueChanged.connect(self.update_selected)
+        self.name_edit.returnPressed.connect(ok_button.click)
+        ok_button.clicked.connect(self.add_label)
+        remove_button.clicked.connect(self.remove_label)
+
+        self.update_selected()
 
     def add_label(self):
         new_name = self.name_edit.text()
+        label_id = self.id_edit.value()
         categories = self.layer.categories.copy()
         if not new_name:
-            return
-        if new_name in categories.values():
-            raise ValueError(
-                f'"{new_name}" is already in the categories dictionary ({self.layer.categories})'
-            )
-        next_unused = self.layer.next_unused()
-        self.layer.colormap.color_dict[next_unused] = self.color_edit.color
-        categories[next_unused] = new_name
+            new_name = None
+        self.layer.colormap.color_dict[label_id] = self.color_edit.color
+        categories[label_id] = new_name
         self.layer.categories = categories
-        self.layer.selected_label = next_unused
+        self.layer.selected_label = label_id
 
         self.close()
+
+    def remove_label(self):
+        label_id = self.id_edit.value()
+        if label_id == self.layer.colormap.background_value:
+            raise ValueError('cannot remove the background category')
+        categories = self.layer.categories.copy()
+        categories.pop(label_id)
+        decrease_label_id(self.layer)
+        self.layer.categories = categories
+
+        self.close()
+
+    def update_selected(self):
+        label_id = self.id_edit.value()
+        self.color_edit.setColor(
+            self.layer.colormap.color_dict.get(label_id, np.random.rand(3))
+        )
+        self.name_edit.setText(
+            self.layer.categories.get(label_id, self.name_edit.text())
+        )
 
 
 class QtCurrentLabelControl(QtWidgetControlsBase):
@@ -271,9 +302,8 @@ class QtCurrentLabelControl(QtWidgetControlsBase):
         self.selection_spinbox = QtLabelSpinBox(layer)
         self.selection_combobox = QtCategoriesComboBox(layer)
 
-        self.new_label_button = QPushButton()
-        self.new_label_button.setText('new')
-        self.new_label_button.clicked.connect(self._on_new_button_click)
+        self.edit_label_button = QPushButton()
+        self.edit_label_button.clicked.connect(self._on_edit_button_click)
 
         self.current_label_label = QtWrappedLabel('label:')
         self.current_label_row = QWidget()
@@ -283,7 +313,7 @@ class QtCurrentLabelControl(QtWidgetControlsBase):
         color_layout.setSpacing(4)
         color_layout.addWidget(self.selection_spinbox, 1)
         color_layout.addWidget(self.selection_combobox, 1)
-        color_layout.addWidget(self.new_label_button, 0)
+        color_layout.addWidget(self.edit_label_button, 0)
 
         self.current_label_row.setLayout(color_layout)
         self.current_label_row.setProperty('foreground', 'true')
@@ -295,19 +325,23 @@ class QtCurrentLabelControl(QtWidgetControlsBase):
         if self._layer.categories is None:
             self.selection_combobox.setVisible(False)
             self.selection_spinbox.setVisible(True)
+            self.edit_label_button.setText('new')
         else:
             self.selection_spinbox.setVisible(False)
             self.selection_combobox.setVisible(True)
+            self.edit_label_button.setText('edit')
 
-    def _on_new_button_click(self):
-        """Select a new label for the labels layer when the button is clicked."""
+    def _on_edit_button_click(self):
+        """Select a new label or edit existing categories."""
         if self._layer.categories is None:
             new_label(self._layer)
         else:
             diag = QNewNamedLabelDialog(
-                parent=self.new_label_button, layer=self._layer
+                parent=self.edit_label_button, layer=self._layer
             )
             diag.show_right_of_mouse()
 
-    def get_widget_controls(self) -> list[tuple[QtWrappedLabel, QWidget]]:
+    def get_widget_controls(
+        self,
+    ) -> list[tuple[QtWrappedLabel, QWidget] | tuple[QWidget]]:
         return [(self.current_label_label, self.current_label_row)]

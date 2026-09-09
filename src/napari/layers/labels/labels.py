@@ -879,11 +879,13 @@ class Labels(ScalarFieldBase):
     def next_unused(self) -> int:
         if not isinstance(self.data, np.ndarray):
             show_info(
-                'Calculating empty label on non-numpy array is not supported'
+                'Finding the next unused label on non-numpy arrays is not supported'
             )
             return self.selected_label
 
         next_unused = int(np.max(self.data)) + 1
+        while next_unused in (self.categories or []):
+            next_unused += 1
         if self.selected_label == next_unused:
             show_info(
                 'Current selected label is not yet used. You will need to use it first '
